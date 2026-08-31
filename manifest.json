@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "io.github.edgarsilva.hw-monitor",
   "name": "Hardware Monitor",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Edgar Silva",
   "license": "MIT",
-  "description": "RAM, CPU, and GPU in the bar as vertical gauges that fill and warm up as the machine gets busy, with temperatures beside them.",
+  "description": "RAM, CPU, and GPU in the bar as sleek icon + figure readouts and temperatures, with a first-class visual system panel.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,17 +14,17 @@
   },
   "barWidget": {
     "displayName": "Hardware Monitor",
-    "description": "Memory, CPU, and GPU load as vertical gauges with temperatures, or spelled out as words. Left click opens btop floating and centered; hover says so.",
+    "description": "Memory, CPU, and GPU load as sleek icon readouts with temperatures, vertical gauges, or spelled out words. Left click opens the system telemetry panel.",
     "category": "System",
     "allowMultiple": true,
     "defaultSection": "right",
     "defaults": {
-      "mode": "full",
+      "mode": "icons",
       "refreshIntervalSec": 2,
       "showRam": true,
       "showCpu": true,
       "showGpu": true,
-      "showGauges": true,
+      "showGauges": false,
       "showValues": false,
       "showClocks": false,
       "iconSize": 0,
@@ -36,8 +36,8 @@
       "criticalPercent": 90,
       "warnTempC": 75,
       "criticalTempC": 90,
-      "clickCommand": "omarchy-launch-or-focus-tui btop",
-      "percentPad": "zero",
+      "clickCommand": "",
+      "percentPad": "none",
       "monitors": []
     },
     "schema": [
@@ -46,12 +46,13 @@
         "type": "enum",
         "label": "Readout",
         "options": [
+          "icons",
           "compact",
           "full",
           "labels"
         ],
-        "defaultValue": "full",
-        "description": "compact is glyph + gauge; full adds the temperature; labels spells the readout out as words — RAM 19.4/63G · CPU 34% 46° — with no glyph or gauge, the way a Waybar hardware group reads. Right-clicking the widget cycles them."
+        "defaultValue": "icons",
+        "description": "icons is sleek icon + figures + temperature; compact is glyph + gauge; full adds the temperature; labels spells the readout out as words — RAM 11/23G · CPU 34% 46° — with no glyph or gauge. Right-clicking the widget cycles them."
       },
       {
         "key": "monitors",
@@ -74,7 +75,7 @@
         "type": "boolean",
         "label": "Show percentages",
         "defaultValue": false,
-        "description": "Put the numbers back on the row beside each gauge. Off by default — the gauges carry the level and the tooltip carries the detail."
+        "description": "Put the numbers back on the row beside each gauge in compact/full modes. (icons and labels always show them)."
       },
       {
         "key": "ramFormat",
@@ -112,8 +113,8 @@
           "trail",
           "none"
         ],
-        "defaultValue": "zero",
-        "description": "How a percentage holds its width so the group does not resize as the figure gains a digit. lead pads with a space (' 3%'), zero pads with a zero ('03%'), trail reserves the leftover after the group, none lets it size naturally and accepts the reflow. A pad character is a full cell in a monospace face, so lead puts a gap between a label and its figure where zero puts ink."
+        "defaultValue": "none",
+        "description": "How a percentage holds its width so the group does not resize as the figure gains a digit. lead pads with a space (' 3%'), zero pads with a zero ('03%'), trail reserves the leftover after the group, none lets it size naturally without padding zero. A pad character is a full cell in a monospace face, so lead puts a gap between a label and its figure where zero puts ink."
       },
       {
         "key": "showRam",
@@ -161,7 +162,8 @@
         "key": "showGauges",
         "type": "boolean",
         "label": "Show gauges",
-        "defaultValue": true
+        "defaultValue": false,
+        "description": "Show vertical gauges in the bar readout."
       },
       {
         "key": "gpu",
@@ -217,8 +219,8 @@
         "key": "clickCommand",
         "type": "string",
         "label": "Left click runs",
-        "defaultValue": "omarchy-launch-or-focus-tui btop",
-        "description": "Empty disables the click action."
+        "defaultValue": "",
+        "description": "Command to run on left click (e.g. 'omarchy-launch-or-focus-tui btop'). Empty opens the built-in system telemetry panel."
       }
     ]
   },

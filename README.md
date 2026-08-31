@@ -1,9 +1,8 @@
-# Hardware Monitor — Omarchy bar widget
+# Hardware Monitor — Omarchy bar widget & system panel
 
-Memory, CPU, and GPU in the bar. Three readouts, cycled with a right click:
-gauges alone, gauges with temperatures, or the numbers spelled out.
+Memory, CPU, and GPU in the bar, with a first-class visual system panel popup. Four readouts, cycled with a right click: sleek icon groups (Noctalia-style), gauges alone, gauges with temperatures, or the numbers spelled out.
 
-![The label readout in a bar](preview.png)
+![The icon readout in a bar](preview.png)
 
 Everything is read straight from `/proc` and `/sys` inside the shell process —
 no polling script, no subprocess on a timer.
@@ -25,15 +24,26 @@ Nothing to configure — it finds this machine's sensors on its own.
 
 ## Usage
 
-- **Left click** — opens `btop`, floating and centred, through
-  `omarchy-launch-or-focus-tui`, so a second click focuses the window you
-  already have rather than opening another.
-- **Right click** — cycles `compact` → `full` → `labels`, and remembers it.
+- **Left click** — opens the built-in visual system telemetry panel anchored to the widget (or runs `clickCommand` if configured).
+- **Right click** — cycles `icons` → `compact` → `full` → `labels`, and remembers it.
 - **Middle click** — resamples immediately.
-- **Hover** — says what the clicks do, and nothing more. The full breakdown is
-  a `status` call away (see [IPC](#ipc)).
+- **Hover** — says what the clicks do. The full breakdown is a `status` call away (see [IPC](#ipc)).
 
-### The three readouts
+### The system panel
+
+Clicking the widget opens an Omarchy keyboard-driven popup panel anchored to the bar:
+
+- **Hero summary & Unit Toggle** — core/thread count, GPU summary, and a live toggle switch between **°C** and **°F** at the top right.
+- **Telemetry dials** — 270° circular gauges with live figures for CPU load & temp, RAM usage, and GPU load & temp with dynamic temperature coloring.
+- **60s CPU load sparkline** — live history trend buffer sampled while open (zero background cost when closed).
+- **Processor details** — full CPU model name (without cutoff), load, clock frequency, dynamic temperature color, and 1m/5m/15m load average meters.
+- **Memory breakdown** — used/total GiB visual meter, available, cache, and swap usage.
+- **Graphics metrics** — full GPU card name, load, dynamic temperature color, VRAM meter, power draw (W), fan RPM, and clock speeds.
+- **Keyboard navigation** — `Escape` to close, `Tab`/`Shift+Tab` to switch panels, `r` to resample, `c`/`f` to toggle °C/°F.
+
+### The four bar readouts
+
+**`icons`** *(default)* — sleek component icon, live figures, and temperature with dynamic temperature coloring (e.g. ` 11/23G    34% 46°   󰾲 15% 52°`), ~140px.
 
 **`compact`** — a glyph and a gauge per component, ~80px. The gauge fills from
 the bottom and warms toward the theme's urgent colour as load climbs, so the
@@ -91,197 +101,80 @@ widget renders a dash rather than a zero that looks like real data.
 
 ## Settings
 
-Set per bar entry in `~/.config/omarchy/shell.json`. They apply on save.
+Settings are read from this widget's entry in `~/.config/omarchy/shell.json`:
 
 ```json
 {
   "id": "io.github.edgarsilva.hw-monitor",
-  "mode": "labels",
-  "percentPad": "zero",
-  "gpuIconRotation": 90
+  "mode": "icons",
+  "refreshIntervalSec": 2,
+  "showRam": true,
+  "showCpu": true,
+  "showGpu": true,
+  "ramFormat": "used/total",
+  "tempFormat": "degree",
+  "fahrenheit": false,
+  "warnPercent": 70,
+  "criticalPercent": 90,
+  "warnTempC": 75,
+  "criticalTempC": 90
 }
 ```
 
-| Key | Default | Meaning |
-|---|---|---|
-| `mode` | `full` | `compact`, `full`, or `labels` |
-| `monitors` | *(all)* | Connector names to draw on — `"DP-1"`, or `"DP-1,HDMI-A-1"`. See [per-monitor](#one-screen-only) |
-| `refreshIntervalSec` | `2` | Sampling interval, 1–60 |
-| `showRam`, `showCpu`, `showGpu` | `true` | Drop a group |
-| `showGauges` | `true` | Hide the gauges |
-| `showValues` | `false` | Add percentages to the icon modes (`labels` always shows them) |
-| `showClocks` | `false` | Add CPU and GPU clock speed in GHz |
-| `ramFormat` | `used/total` | Also `used` or `percent`, where values are shown |
-| `tempFormat` | `degree` | `45°`, or `unit` `45C`, `unit-lower` `45c`, `degree-unit` `45°C`, `bare` `45` |
-| `percentPad` | `zero` | How a percentage holds its width — see [below](#why-a-percentage-is-padded) |
-| `padOpacity` | `0.3` | How faint the placeholder zero is |
-| `gpu` | `auto` | `auto`, an index, or a substring of the card, driver, or model name |
-| `fahrenheit` | `false` | Temperatures in °F |
-| `warnPercent` / `criticalPercent` | `70` / `90` | Where a reading starts warming toward urgent, and where it is fully urgent and the gauge glows |
-| `warnTempC` / `criticalTempC` | `75` / `90` | The same two thresholds for temperature, always in °C |
-| `iconSize` | `0` | `0` follows the theme — see [sizing](#sizing) |
-| `ramIcon`, `cpuIcon`, `gpuIcon` | DIMM, chip, card | Swap in your own glyphs |
-| `ramIconRotation`, `cpuIconRotation`, `gpuIconRotation` | `0` | Rotate a glyph, in degrees |
-| `clockIcon` | `󰓅` | Marks the clock figure when `showClocks` is on |
-| `clickCommand` | `omarchy-launch-or-focus-tui btop` | Empty disables the click |
-
-Colours are not configurable on purpose. A reading only ever draws in the
-theme's foreground mixed toward its urgent colour in proportion to load, so it
-stays coherent across every Omarchy theme rather than pinning a green/amber/red
-ramp that would clash with half of them.
-
-Two instances are allowed, so a machine with two GPUs can show both:
-
-```json
-{ "id": "io.github.edgarsilva.hw-monitor", "showRam": false, "showCpu": false, "gpu": "0" },
-{ "id": "io.github.edgarsilva.hw-monitor", "showRam": false, "showCpu": false, "gpu": "1" }
-```
-
-### Why a percentage is padded
-
-A percentage is one or two digits. Letting it size naturally means the group —
-and every widget beside it — jumps sideways each time CPU crosses 9%, several
-times a minute. So the column is held at a constant width, and `percentPad`
-decides how:
-
-| | Renders | Trade |
-|---|---|---|
-| `zero` | `03%` with the zero at `padOpacity` | Even gaps, nothing moves. The zero holds the column without being read as a digit. |
-| `lead` | `" 3%"` | Same width, but a space is a full cell in a monospace face, so it sits between a label and its figure. |
-| `trail` | `3%` | Figures stay tight; the leftover is reserved after the group, which leaves ~11px more gap there. |
-| `none` | `3%` | Tightest, and the widget resizes as readings cross 9%. |
-
-At exactly 100% the figure needs a fourth character in any of these, so the
-group widens briefly under full load.
-
-### One screen only
-
-The bar mounts one instance of every widget per monitor, and has no per-monitor
-filter of its own. `monitors` is that filter: an instance whose screen is not
-listed hides itself, collapses to zero width, and stops sampling, so a bar that
-is crowded on a second screen can carry this widget on the first alone.
+Or set dynamically from the command line:
 
 ```sh
-omarchy bar set io.github.edgarsilva.hw-monitor monitors DP-1
+omarchy bar set io.github.edgarsilva.hw-monitor mode full
+omarchy bar set io.github.edgarsilva.hw-monitor fahrenheit true --json
 ```
 
-Names are Hyprland connector names — `hyprctl monitors -j | jq -r '.[].name'`.
-An instance that cannot resolve its screen yet shows rather than hides, so the
-widget never disappears because it was asked too early during startup.
-
-### Sizing
-
-`iconSize` scales this widget alone, which leaves its glyphs out of step with
-the tray and audio icons beside it. If the whole bar looks small, the knob you
-want is the shell's type scale:
-
-```toml
-# ~/.config/omarchy/shell.toml — layered over any theme, applies on save
-[font]
-base-size = 14
-```
-
-Everything derives from that one number: bar height `26 × base/12`, bar icons
-`13 × base/12`, body text `= base`. Omarchy maps shell px to terminal points at
-`pt = px × 0.75`. `omarchy display text size <n>` writes the same key and syncs
-GTK and your terminal configs to it, but caps at 20px — and passing the *point*
-size you have in mind will set the shell to that many *pixels* and rewrite your
-terminals down to three quarters of it.
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `mode` | string | `"icons"` | `"icons"`, `"compact"`, `"full"`, or `"labels"`. Right-clicking cycles them. |
+| `refreshIntervalSec` | int | `2` | Seconds between samples. `1` is as fast as `FileView` makes sense; `5` is plenty for a background bar. |
+| `showRam` | bool | `true` | Show memory. |
+| `showCpu` | bool | `true` | Show CPU. |
+| `showGpu` | bool | `true` | Show GPU (hidden automatically if no card was found). |
+| `showValues` | bool | `false` | Put percentages back on the row beside each gauge in `compact`/`full` modes. (`icons` and `labels` always show them). |
+| `showGauges` | bool | `false` | Show vertical capsule gauges. |
+| `showClocks` | bool | `false` | Show CPU and GPU clock speeds in GHz. |
+| `clockIcon` | string | `"󰓅"` | Glyph marking the clock figure. Empty draws the number alone. |
+| `iconSize` | int | `0` | Overall scale in pixels. `0` follows the bar's icon font. |
+| `ramFormat` | string | `"used/total"` | `"used/total"` (`11/23G`), `"used"` (`11.2G`), or `"percent"` (`49%`). |
+| `tempFormat` | string | `"degree"` | `"degree"` (`45°`), `"unit"` (`45C`), `"unit-lower"` (`45c`), `"degree-unit"` (`45°C`), or `"bare"` (`45`). |
+| `percentPad` | string | `"none"` | `"none"`, `"zero"`, `"lead"`, or `"trail"`. |
+| `gpu` | string | `"auto"` | `"auto"` picks the card reporting load; otherwise an index (`0`, `1`) or name substring. |
+| `fahrenheit` | bool | `false` | Temperatures in °F instead of °C. |
+| `warnPercent` | int | `70` | Load threshold where numbers and glyphs warm toward the urgent colour. |
+| `criticalPercent` | int | `90` | Load threshold where the gauge glows and color reaches full urgent. |
+| `warnTempC` | int | `75` | Temperature threshold (°C) where figures warm toward urgent. |
+| `criticalTempC` | int | `90` | Temperature threshold (°C) where temperature turns hot urgent red. |
+| `clickCommand` | string | `""` | Command to run on left click. Empty opens the built-in system panel popup. |
+| `monitors` | array/string | `[]` | Connector names to draw on (e.g. `["DP-1"]`). Empty draws on all screens. |
 
 ## IPC
 
-```sh
-omarchy-shell io.github.edgarsilva.hw-monitor status      # the full breakdown
-omarchy-shell io.github.edgarsilva.hw-monitor refresh     # resample now
-omarchy-shell io.github.edgarsilva.hw-monitor cycleMode   # next readout
-```
-
-`status` is everything the bar does not show — CPU model and core count, load
-average, cache and swap, VRAM, watts, fan, clocks — as plain text, which makes
-it easy to hang off a keybinding:
-
-```lua
-o.bind("SUPER + CTRL + ALT + H", "Hardware",
-  'notify-send "$(omarchy-shell io.github.edgarsilva.hw-monitor status)"')
-```
-
-## Requirements
-
-- A Nerd Font for the glyphs, which Omarchy already ships
-- `pciutils` (`lspci`) — optional, only to name a card in `status`
-- `nvidia-smi` — only for NVIDIA cards, installed with the driver
-
-No pip packages, no daemon, no elevated privileges. Nothing is written outside
-the shell's own config; the plugin reads `/proc` and `/sys` and nothing else.
-
-## Development
-
-The repo is the source of truth; the shell loads a plain copy from
-`~/.config/omarchy/plugins/<id>/`. Sync and reload after an edit:
+Call methods through `omarchy-shell`:
 
 ```sh
-rsync -a --delete --exclude .git ./ ~/.config/omarchy/plugins/io.github.edgarsilva.hw-monitor/
-omarchy restart shell
+# Open the system telemetry popup
+omarchy-shell io.github.edgarsilva.hw-monitor open
+
+# Close the system panel
+omarchy-shell io.github.edgarsilva.hw-monitor close
+
+# Toggle the system panel popup
+omarchy-shell io.github.edgarsilva.hw-monitor toggle
+
+# Toggle Celsius / Fahrenheit
+omarchy-shell io.github.edgarsilva.hw-monitor toggleFahrenheit
+
+# Cycle the display mode
+omarchy-shell io.github.edgarsilva.hw-monitor cycleMode
+
+# Force an immediate resample
+omarchy-shell io.github.edgarsilva.hw-monitor refresh
+
+# Dump the full multi-line telemetry breakdown
+omarchy-shell io.github.edgarsilva.hw-monitor status
 ```
-
-`omarchy restart shell` rather than a hot reload: edited plugin QML is often
-still served from the old instance until the shell process restarts, and
-`omarchy-shell shell rescanPlugins` will report a reload that did not visibly
-happen. Hot reload can also leave a stale `IpcHandler` registered, so an IPC or
-settings test against a hot-reloaded plugin can pass or fail for the wrong
-reason.
-
-Symlinking the plugin directory at the workspace does not work —
-`omarchy plugin validate` refuses a plugin folder that is itself a symlink.
-
-Validate before publishing:
-
-```sh
-omarchy plugin validate .
-qmllint -I /usr/share/omarchy/shell Widget.qml Service.qml Gauge.qml
-```
-
-`qmllint` cannot resolve `qs.Commons` / `qs.Ui` from the shell root directly —
-those modules declare `module qs.Ui` from a directory named `Ui/`, which
-Quickshell maps itself. Point it at a tree shaped the way it expects:
-
-```sh
-mkdir -p /tmp/qsimports/qs
-ln -s /usr/share/omarchy/shell/Ui /tmp/qsimports/qs/Ui
-ln -s /usr/share/omarchy/shell/Commons /tmp/qsimports/qs/Commons
-qmllint -I /tmp/qsimports -I /usr/lib/qt6/qml Widget.qml Service.qml Gauge.qml
-```
-
-That reports no errors. The remaining warnings are `unqualified` for `root.`
-read inside a `Component` delegate and `missing-property` for `Style.bar.*`
-through its `QtObject` — both artifacts of how qmllint resolves component scopes
-and Quickshell's singletons, and the shell's own widgets produce the same class.
-
-`hw-probe` runs standalone, which is the fastest way to check sensor discovery
-on a machine without touching the shell at all:
-
-```sh
-./hw-probe | jq
-```
-
-### If this ever stores anything
-
-It does not today — the plugin reads `/proc`, `/sys`, and its own settings out
-of `shell.json`, and writes nothing of its own. Should that change, create the
-file `0600` inside a `0700` directory, **created with those modes** rather than
-`chmod`ed after the fact — a file is readable for the moment between `open` and
-`chmod`, and a default `umask` leaves it `0644`, world-readable on a shared
-machine. Same rule for any directory: `mkdir -m 700`, not `mkdir` then `chmod`.
-
-## Removal
-
-```sh
-omarchy plugin remove io.github.edgarsilva.hw-monitor
-```
-
-That drops it from the bar and deletes the plugin. It keeps no state and writes
-no files of its own, so there is nothing else to clean up.
-
-## License
-
-MIT — see [LICENSE](LICENSE).

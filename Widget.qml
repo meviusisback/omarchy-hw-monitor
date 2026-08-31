@@ -5,32 +5,36 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// RAM, CPU, and GPU as a row of gauges: a glyph, a battery-style capsule that
-// fills and warms toward the theme's urgent color as load climbs, and the
-// temperature beside it.
+// RAM, CPU, and GPU as a row of sleek telemetry readouts: component glyphs,
+// clean live numbers, and temperatures in the bar, with a first-class visual popup panel.
 //
-// Every group is one line tall and vertically centered, so the glyphs sit on
-// the same optical center as every other icon in the bar. The numbers live in
-// the gauges rather than in the bar itself — set `showValues` to put
-// percentages back on the row, or ask over IPC for the full breakdown.
-//
-// Left click opens btop through the Omarchy launcher, which already has a
-// Hyprland rule making org.omarchy.btop float and center. Right click walks
-// the display modes and remembers the choice; middle click resamples.
-BarWidget {
+// Left click opens the Omarchy system panel popup (or runs clickCommand if set).
+// Right click walks the display modes and remembers the choice; middle click resamples.
+Panel {
   id: root
   moduleName: "io.github.edgarsilva.hw-monitor"
+  ipcTarget: "io.github.edgarsilva.hw-monitor"
+  manageIpc: false
 
-  // Three states, cycled by right click:
+  readonly property bool vertical: bar ? bar.vertical : false
+
+  function broadcast(method) {
+    var items = bar && typeof bar.moduleWidgets === "function"
+      ? bar.moduleWidgets(moduleName) : [root]
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] && typeof items[i][method] === "function") items[i][method]()
+    }
+  }
+
+  // Four states, cycled by right click:
+  //   icons    icon + figures + temperature (Noctalia-style sleek readout, default)
   //   compact  glyph + gauge
   //   full     glyph + gauge + temperature
-  //   labels   the old Waybar reading — RAM 19.4/63G · CPU 34% 46° — with the
-  //            words spelled out and no glyph or gauge, for when you want the
-  //            numbers rather than the shapes
-  readonly property var modes: ["compact", "full", "labels"]
+  //   labels   Waybar-style text readout — RAM 11/23G · CPU 34% 46° — with words spelled out
+  readonly property var modes: ["icons", "compact", "full", "labels"]
   readonly property string mode: {
-    var want = String(setting("mode", "full")).trim().toLowerCase()
-    return modes.indexOf(want) === -1 ? "full" : want
+    var want = String(setting("mode", "icons")).trim().toLowerCase()
+    return modes.indexOf(want) === -1 ? "icons" : want
   }
 
   // A vertical bar is 28px wide — a glyph and a gauge and nothing else — so it
@@ -38,11 +42,9 @@ BarWidget {
   readonly property string nextMode: modes[(modes.indexOf(mode) + 1) % modes.length]
   readonly property bool labelled: mode === "labels" && !vertical
   readonly property bool showTemps: mode !== "compact" && !vertical
-  readonly property bool showValues: (labelled || boolSetting("showValues", false)) && !vertical
-  readonly property bool showGauges: boolSetting("showGauges", true)
-  // Clock speed: the CPU's average across every thread, and the GPU's core
-  // clock. Off by default — three gauges and two temperatures is already a lot
-  // of bar, and a clock that idles at 0.8 tells you less than the gauge does.
+  readonly property bool showValues: (labelled || mode === "icons" || boolSetting("showValues", false)) && !vertical
+  readonly property bool showGauges: boolSetting("showGauges", mode !== "icons" && mode !== "labels")
+  // Clock speed: the CPU's average across every thread, and the GPU's core clock.
   readonly property bool showClocks: boolSetting("showClocks", false) && !vertical
 
   // Which screens this instance draws on; empty means all of them. The bar
@@ -76,13 +78,10 @@ BarWidget {
     return ["used/total", "used", "percent"].indexOf(want) === -1 ? "used/total" : want
   }
 
-  // One knob for the whole group's scale. 0 follows the theme's bar icon size,
-  // and at that size the derived label sizes below land exactly on the theme's
-  // own body/caption tokens — so overriding this grows the readout coherently
-  // instead of leaving 16px glyphs beside 11px numbers.
+  // One knob for the whole group's scale. 0 follows the theme's bar icon size.
   readonly property int iconSizeSetting: intSetting("iconSize", 0, 0, 48)
   readonly property int iconSize: iconSizeSetting > 0 ? iconSizeSetting : Style.bar.iconFont
-  readonly property int valueSize: Math.max(9, Math.round(iconSize * 0.92))
+  readonly property int valueSize: Math.max(9, Math.round(iconSize * 0.95))
   readonly property int labelSize: Math.max(8, Math.round(iconSize * 0.85))
 
   readonly property int warnPercent: intSetting("warnPercent", 70, 1, 100)
@@ -90,26 +89,13 @@ BarWidget {
   readonly property int warnTempC: intSetting("warnTempC", 75, 1, 150)
   readonly property int criticalTempC: intSetting("criticalTempC", 90, 1, 150)
 
-  readonly property string clickCommand: String(setting("clickCommand", "omarchy-launch-or-focus-tui btop"))
+  readonly property string clickCommand: String(setting("clickCommand", ""))
 
-  // Three different silhouettes: a DIMM stick, a pinned chip, and an expansion
-  // card with its output ports. Legibility at bar size is the constraint — the
-  // font's own cpu_64_bit glyph writes "64" on a chip and collapses into mud,
-  // and two chip-shaped glyphs cannot be told apart at all. The card needs
-  // ~16px to read; on a 13px bar 󰆧 (cube outline) is the clearer stand-in.
-  // Frequency has no glyph of its own in the font, so this is a stand-in: a
-  // speedometer for "rate". Its tick marks need ~16px to stay distinct, which
-  // the default 13px bar does not give it — at that size 󱑻 (square wave) or
-  // 󰥛 (sine wave) hold up better, and an empty string draws the number alone.
   readonly property string clockIcon: String(setting("clockIcon", "󰓅"))
-
   readonly property string ramIcon: String(setting("ramIcon", ""))
   readonly property string cpuIcon: String(setting("cpuIcon", ""))
   readonly property string gpuIcon: String(setting("gpuIcon", "󰾲"))
 
-  // `omarchy bar set <id> <key> <value>` writes the value as a JSON string
-  // unless the caller passes --json, so a boolean setting has to accept "true"
-  // as readily as true or it silently ignores half the ways it gets set.
   function boolSetting(name, fallback) {
     var value = setting(name, fallback)
     if (typeof value === "boolean") return value
@@ -119,9 +105,6 @@ BarWidget {
     return fallback
   }
 
-  // Rotation, in degrees, per glyph. An expansion card is drawn lying flat; on
-  // its end it reads as a card seated in a slot, and stands beside the upright
-  // gauge better. The glyph box is square, so any angle fits without clipping.
   readonly property int ramIconRotation: intSetting("ramIconRotation", 0, -360, 360)
   readonly property int cpuIconRotation: intSetting("cpuIconRotation", 0, -360, 360)
   readonly property int gpuIconRotation: intSetting("gpuIconRotation", 0, -360, 360)
@@ -136,13 +119,9 @@ BarWidget {
 
   readonly property color base: bar ? bar.barForeground : Color.foreground
   readonly property color hot: bar ? bar.urgent : Color.urgent
-  readonly property color dim: Qt.darker(base, 1.55)
+  readonly property color dim: Qt.darker(base, 1.45)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
-  // Every reading shares one visual language: nothing to report stays in the
-  // theme foreground, and load mixes it toward urgent in proportion. Themes
-  // only guarantee foreground/accent/urgent, so a hand-picked green/amber/red
-  // ramp would clash with half of them.
   function warm(from, amount) {
     if (!(amount > 0)) return from
     var t = Math.min(1, amount)
@@ -152,30 +131,23 @@ BarWidget {
                    from.a)
   }
 
-  // A percentage is one or two digits, and letting it size naturally means the
-  // whole group — and every widget beside it — jumps sideways each time CPU
-  // crosses 9%. Padding the string was the first fix, but a leading space
-  // lands between the label and its figure and reads as a disconnect. So
-  // reserve the width of the widest value instead and left-align inside it:
-  // the figure stays welded to its label and the slack sits after it, next to
-  // the temperature, where a gap between two different quantities belongs.
-  // How a percentage holds its width, so that a group does not change size as
-  // the figure gains a digit and shove every widget beside it sideways:
-  //   lead   " 3%" — a leading space. Constant width, nothing moves; the space
-  //          is a full character cell, so it sits between a label and its figure.
-  //   zero   "03%" — same constant width, but ink instead of a hole.
-  //   trail  "3%" with the leftover width reserved after the group. Figures stay
-  //          tight, at the cost of ~11px more gap after a percentage group.
-  //   none   "3%" at its natural width. Tightest, but the widget resizes every
-  //          time a reading crosses 9% and nudges its neighbours sideways.
-  readonly property string percentPad: {
-    var want = String(setting("percentPad", "zero")).trim().toLowerCase()
-    if (want === "space") want = "trail"  // the name this option shipped under
-    return ["lead", "zero", "trail", "none"].indexOf(want) === -1 ? "zero" : want
+  // Specific temperature color: cool below 50°C, warming up 50-75°C, hot red >= 75°C
+  function tempColor(tempC) {
+    if (!isFinite(tempC) || tempC <= 0) return dim
+    if (tempC < 50) return dim
+    var t = Math.min(1, Math.max(0, (tempC - 50) / Math.max(1, criticalTempC - 50)))
+    return Qt.rgba(base.r + (hot.r - base.r) * t,
+                   base.g + (hot.g - base.g) * t,
+                   base.b + (hot.b - base.b) * t,
+                   base.a)
   }
 
-  // How faint that placeholder zero is — below the temperature's own dimming, so
-  // it reads as a column marker rather than as a digit.
+  readonly property string percentPad: {
+    var want = String(setting("percentPad", mode === "icons" ? "none" : "zero")).trim().toLowerCase()
+    if (want === "space") want = "trail"
+    return ["lead", "zero", "trail", "none"].indexOf(want) === -1 ? (mode === "icons" ? "none" : "zero") : want
+  }
+
   readonly property real padOpacity: {
     var n = Number(setting("padOpacity", 0.3))
     return isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.3
@@ -195,21 +167,14 @@ BarWidget {
   Service {
     id: hw
     settings: root.settings
-    // No point sampling for a screen this instance is not drawn on.
     active: root.onThisScreen
   }
 
-  // In a monospace face the degree sign owns a full character cell but only
-  // inks a small ring at the top of it, so it reads as a gap between the
-  // temperature and whatever follows. A letter fills the cell instead.
   readonly property string tempFormat: {
     var want = String(setting("tempFormat", "degree")).trim().toLowerCase()
     return ["degree", "unit", "unit-lower", "degree-unit", "bare"].indexOf(want) === -1 ? "degree" : want
   }
 
-  // In "zero" mode the leading zero is its own text so it can be dimmed to the
-  // point of being furniture: it holds the column width without being read as
-  // part of the number.
   function percentPadFor(value) {
     if (percentPad !== "zero") return ""
     if (!isFinite(value) || value < 0) return ""
@@ -231,29 +196,33 @@ BarWidget {
     else if (tempFormat === "unit") text += unit
     else if (tempFormat === "unit-lower") text += unit.toLowerCase()
     else if (tempFormat === "degree-unit") text += "°" + unit
-    return Model.padLeft(text, 3)
+    return (labelled || percentPad === "lead") ? Model.padLeft(text, 3) : text
   }
 
   function ramText() {
     if (ramFormat === "percent") return percentText(hw.memPercent)
     if (!hw.memory) return "–"
 
-    // The label mode reads as a sentence, so it gets the decimal and the unit;
-    // the icon modes are a glance next to a gauge, so they stay narrow.
-    if (labelled) {
-      return Model.formatGibPrecise(Model.gibFromKib(hw.memory.usedKib))
-             + "/" + Model.formatGib(Model.gibFromKib(hw.memory.totalKib)) + "G"
+    var usedGib = Model.gibFromKib(hw.memory.usedKib)
+    var totalGib = Model.gibFromKib(hw.memory.totalKib)
+
+    if (ramFormat === "used") {
+      return Model.formatGibPrecise(usedGib) + "G"
     }
 
-    var used = Model.formatGib(Model.gibFromKib(hw.memory.usedKib))
-    if (ramFormat === "used") return Model.padLeft(used + "G", 4)
-    var total = Model.formatGib(Model.gibFromKib(hw.memory.totalKib))
+    if (labelled) {
+      return Model.formatGibPrecise(usedGib) + "/" + Model.formatGib(totalGib) + "G"
+    }
+
+    if (mode === "icons") {
+      return Model.formatGib(usedGib) + "/" + Model.formatGib(totalGib) + "G"
+    }
+
+    var used = Model.formatGib(usedGib)
+    var total = Model.formatGib(totalGib)
     return Model.padLeft(used, 3) + "/" + total
   }
 
-  // One entry per group the bar draws. `ratio` fills the gauge, `severity`
-  // drives the color, and either can be -1/0 when a machine does not report
-  // that sensor.
   readonly property var cells: {
     var out = []
 
@@ -265,10 +234,9 @@ BarWidget {
         iconRotation: ramIconRotation,
         value: ramText(),
         pad: "",
-        // Memory's figure has its own width already; a slot would only add slack.
         slotted: false,
-        // Memory has no temperature, so its gauge is the whole readout.
         temp: "",
+        tempC: -1,
         clock: "",
         ratio: hw.memPercent >= 0 ? hw.memPercent / 100 : 0,
         severity: Model.severity(hw.memPercent, warnPercent, criticalPercent)
@@ -285,16 +253,14 @@ BarWidget {
         pad: percentPadFor(hw.cpuPercent),
         slotted: percentPad === "trail",
         temp: tempText(hw.cpuTempC),
-        clock: Model.padLeft(Model.formatGhzShort(hw.cpuMhz), 3),
+        tempC: hw.cpuTempC,
+        clock: Model.formatGhzShort(hw.cpuMhz),
         ratio: hw.cpuPercent >= 0 ? hw.cpuPercent / 100 : 0,
-        severity: Math.max(Model.severity(hw.cpuPercent, warnPercent, criticalPercent),
-                           Model.severity(hw.cpuTempC, warnTempC, criticalTempC))
+        severity: Model.severity(hw.cpuPercent, warnPercent, criticalPercent)
       })
     }
 
     if (showGpu && hw.hasGpu) {
-      // A card with no load counter (most iGPUs) still has a temperature and
-      // VRAM, so fall back to filling the gauge with VRAM pressure.
       var busy = hw.gpuPercent
       var meterValue = busy >= 0 ? busy : hw.gpuVramPercent
       out.push({
@@ -306,10 +272,10 @@ BarWidget {
         pad: percentPadFor(meterValue),
         slotted: percentPad === "trail",
         temp: tempText(hw.gpuTempC),
-        clock: Model.padLeft(Model.formatGhzShort(hw.gpuMhz), 3),
+        tempC: hw.gpuTempC,
+        clock: Model.formatGhzShort(hw.gpuMhz),
         ratio: meterValue >= 0 ? meterValue / 100 : 0,
-        severity: Math.max(Model.severity(busy, warnPercent, criticalPercent),
-                           Model.severity(hw.gpuTempC, warnTempC, criticalTempC))
+        severity: Model.severity(busy, warnPercent, criticalPercent)
       })
     }
 
@@ -317,10 +283,6 @@ BarWidget {
   }
 
   // ---------------------------------------------------------------- tooltip
-  //
-  // The bar tooltip is one line: what the clicks do. The full breakdown is
-  // still assembled, but only when something asks for it over IPC — a readout
-  // you are already looking at does not need a paragraph explaining itself.
 
   readonly property string monitorName: {
     var parts = clickCommand.split(/\s+/)
@@ -329,7 +291,7 @@ BarWidget {
   }
 
   readonly property string hint: clickCommand === ""
-    ? "Hardware"
+    ? "Hardware · right click for " + nextMode
     : "Click for " + monitorName + " · right click for " + nextMode
 
   function detail() {
@@ -385,12 +347,6 @@ BarWidget {
     hw.sample()
   }
 
-  // The shell's updateEntryInline replaces the whole entry with whatever it is
-  // handed, so the new one has to be built from the config as it stands on disk
-  // rather than from this widget's injected copy. Building it from `settings`
-  // means a right-click writes back whatever snapshot the widget happens to
-  // hold, silently reverting anything changed since — an `omarchy bar set`, or
-  // a hand edit of shell.json.
   function currentEntry() {
     var config = root.bar && root.bar.shell ? root.bar.shell.shellConfig : null
     var layout = config && config.bar ? config.bar.layout : null
@@ -415,15 +371,27 @@ BarWidget {
     for (var key in live) if (key !== "id") entry[key] = live[key]
     entry.mode = next
 
-    // Applied locally first so the readout changes on the click itself; the
-    // shell.json write comes back through the bar as the same value.
+    root.settings = entry
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
+  }
+
+  function toggleFahrenheit() {
+    var live = currentEntry()
+    var next = !fahrenheit
+    var entry = { id: root.moduleName }
+    for (var key in live) if (key !== "id") entry[key] = live[key]
+    entry.fahrenheit = next
     root.settings = entry
     if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
       root.bar.shell.updateEntryInline(root.moduleName, entry)
   }
 
   function launchMonitor() {
-    if (clickCommand === "") return
+    if (clickCommand === "") {
+      root.toggle()
+      return
+    }
     if (root.bar) root.bar.run(clickCommand)
     else Quickshell.execDetached(["bash", "-lc", clickCommand])
   }
@@ -431,24 +399,21 @@ BarWidget {
   IpcHandler {
     target: "io.github.edgarsilva.hw-monitor"
 
+    function open(): void { root.open() }
+    function close(): void { root.close() }
+    function show(): void { root.open() }
+    function hide(): void { root.close() }
+    function toggle(): void { root.toggle() }
+    function toggleFahrenheit(): void { root.toggleFahrenheit() }
     function refresh(): void { root.broadcast("refresh") }
-    // Not broadcast: the mode is persisted through shell.json, which the bar
-    // hands back to every instance. Cycling all of them would toggle the
-    // setting once per monitor and land wherever the count left it.
     function cycleMode(): void { root.cycleMode() }
     function status(): string { return root.detail() }
   }
 
   // ------------------------------------------------------------------ layout
-  //
-  // One row height for every part of a group — glyph box, gauge, and labels all
-  // get the same height and center their own content inside it, so nothing
-  // needs vertical anchoring and the row cannot drift off the bar's center.
 
   readonly property int glyphBox: Math.max(Style.bar.iconCanvas, iconSize + Style.space(2))
   readonly property int contentHeight: Math.max(glyphBox, Style.space(15))
-  // The gauge is sized off the glyph beside it, so one knob keeps the whole
-  // group in proportion.
   readonly property int gaugeWidth: Math.max(6, Math.round(iconSize * 0.45))
   readonly property int gaugeHeight: Math.max(11, Math.round(iconSize * 0.9))
 
@@ -463,7 +428,7 @@ BarWidget {
     labelVisible: false
     hasVisualContent: root.cells.length > 0
     tooltipText: root.hint
-    horizontalMargin: 5
+    horizontalMargin: 6
     fixedWidth: root.vertical ? -1 : Math.ceil(horizontalCells.implicitWidth + button.scaledHorizontalMargin * 2)
     fixedHeight: root.vertical ? Math.ceil(verticalCells.implicitHeight + Style.space(8)) : -1
 
@@ -477,11 +442,7 @@ BarWidget {
       id: horizontalCells
       visible: !root.vertical
       anchors.centerIn: parent
-      // One rhythm for every mode: 8px between groups against 3–4px inside one,
-      // which is the 2:1 that makes a group read as a unit. With the widget's
-      // own 5px edge padding this hands off to the next widget at ~14px, the
-      // same gap the bar's own icons sit at.
-      spacing: Style.space(8)
+      spacing: Style.space(root.mode === "icons" ? 12 : 8)
 
       Repeater {
         model: root.cells
@@ -502,33 +463,33 @@ BarWidget {
     }
   }
 
-  // A group: glyph, gauge, and — when there is room and the mode asks for it —
-  // the percentage and the temperature.
+  SystemPanel {
+    id: systemPanel
+    anchorItem: button
+    bar: root.bar
+    owner: root
+    open: root.opened
+    hw: hw
+    fahrenheit: root.fahrenheit
+    warnPercent: root.warnPercent
+    criticalPercent: root.criticalPercent
+    warnTempC: root.warnTempC
+    criticalTempC: root.criticalTempC
+  }
+
+  // A component group: glyph + figure (+ temp)
   Component {
     id: cell
 
     Row {
       id: group
       required property var modelData
-      // A label and its figure are one phrase, so they sit tighter than a glyph
-      // sits from its gauge. The gap between groups (set on the row above) does
-      // the separating instead.
-      spacing: Style.space(root.labelled ? 3 : 4)
+      spacing: Style.space(root.mode === "icons" ? 4 : (root.labelled ? 3 : 4))
 
-      // What a one-digit percentage is short of a three-digit one. Held at the
-      // end of the group rather than beside the figure: the group keeps a
-      // constant width either way, so nothing in the bar shifts as the number
-      // gains a digit, and the leftover reads as part of the gap between groups
-      // instead of prising a label away from its number.
       readonly property real slack: root.showValues && modelData.slotted
         ? Math.max(0, root.percentSlot - valueText.implicitWidth - spacing)
         : 0
 
-      // Sized to the glyph's painted bounds rather than to a fixed box. Nerd
-      // Font glyphs carry wildly different amounts of their own whitespace — a
-      // narrow one like 3D floats in the middle of a 16px cell and reads as an
-      // extra 3px of gap on each side, which is why one group looked further
-      // from its neighbour than another despite identical spacing.
       TextMetrics {
         id: glyphMetrics
         font.family: root.fontFamily
@@ -546,18 +507,13 @@ BarWidget {
         width: visible ? Math.max(1, Math.ceil(inkWidth)) : 0
         height: root.contentHeight
 
-        // OpticalGlyph nudges a glyph to center its painted bounds rather than
-        // its character cell, and that nudge is horizontal by construction.
-        // Rotating the item rotates the nudge with it, so on a rotated glyph it
-        // lands as a vertical shift and drops the icon off the row's
-        // centerline. Rotated glyphs get a plain centered Text instead.
         OpticalGlyph {
           anchors.fill: parent
           visible: modelData.iconRotation === 0
           text: modelData.icon
           fontFamily: root.fontFamily
           fontSize: root.iconSize
-          color: root.warm(root.base, modelData.severity)
+          color: root.warm(Color.accent, modelData.severity)
           Behavior on color { ColorAnimation { duration: 240 } }
         }
 
@@ -566,7 +522,7 @@ BarWidget {
           visible: modelData.iconRotation !== 0
           rotation: modelData.iconRotation
           text: modelData.icon
-          color: root.warm(root.base, modelData.severity)
+          color: root.warm(Color.accent, modelData.severity)
           font.family: root.fontFamily
           font.pixelSize: root.iconSize
           renderType: Text.NativeRendering
@@ -622,6 +578,7 @@ BarWidget {
           color: root.warm(root.base, modelData.severity)
           font.family: root.fontFamily
           font.pixelSize: root.valueSize
+          font.bold: true
           verticalAlignment: Text.AlignVCenter
           renderType: Text.NativeRendering
           Behavior on color { ColorAnimation { duration: 240 } }
@@ -658,11 +615,6 @@ BarWidget {
         }
       }
 
-      // Same ink-hugging as the glyphs, for the same reason: the degree sign
-      // paints a small ring high in its cell and leaves the rest of that cell
-      // empty, so a temperature ending a group pushed the next group visibly
-      // further away than a gauge ending one did. The box is the painted
-      // bounds, and the text is offset by its own left bearing to sit in it.
       TextMetrics {
         id: tempMetrics
         font.family: root.fontFamily
@@ -679,7 +631,7 @@ BarWidget {
           x: -tempMetrics.tightBoundingRect.x
           anchors.verticalCenter: parent.verticalCenter
           text: modelData.temp
-          color: root.warm(root.dim, modelData.severity)
+          color: root.tempColor(modelData.tempC)
           font.family: root.fontFamily
           font.pixelSize: root.labelSize
           renderType: Text.NativeRendering
