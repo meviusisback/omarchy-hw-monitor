@@ -121,7 +121,13 @@ KeyboardPanel {
     id: keyCatcher
     anchors.fill: parent
     onCloseRequested: root.close()
-    onTabRequested: function(direction) { root.switchPanel(direction) }
+    // root.owner is the Panel widget root (Widget.qml sets owner: root),
+    // which is what Bar.switchPanelFrom expects.
+    onTabRequested: function(direction) {
+      if (root.owner && typeof root.owner.switchPanel === "function") {
+        root.owner.switchPanel(direction)
+      }
+    }
     onTextKey: function(t) {
       if (t === "r" || t === "R") {
         hw.sample()

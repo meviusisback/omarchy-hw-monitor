@@ -28,7 +28,7 @@
       "showCpuTemp": true,
       "showGpuTemp": false,
       "showRam": true,
-      "showGauges": false,
+      "showGauges": true,
       "showValues": false,
       "showClocks": false,
       "iconSize": 0,
@@ -158,7 +158,7 @@
         "key": "showGauges",
         "type": "boolean",
         "label": "Show vertical gauges",
-        "defaultValue": false,
+        "defaultValue": true,
         "description": "Show vertical battery-style capsule gauges in the bar."
       },
       {

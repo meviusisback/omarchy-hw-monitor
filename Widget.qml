@@ -252,8 +252,8 @@ Panel {
         value: percentText(meterValue),
         pad: percentPadFor(meterValue),
         slotted: percentPad === "trail",
-        temp: "",
-        tempC: -1,
+        temp: (mode === "full" || mode === "labels") && hw.gpuTempC > 0 ? tempText(hw.gpuTempC) : "",
+        tempC: hw.gpuTempC,
         clock: Model.formatGhzShort(hw.gpuMhz),
         ratio: meterValue >= 0 ? meterValue / 100 : 0,
         severity: Model.severity(busy, warnPercent, criticalPercent)
@@ -270,16 +270,16 @@ Panel {
         value: percentText(hw.cpuPercent),
         pad: percentPadFor(hw.cpuPercent),
         slotted: percentPad === "trail",
-        temp: "",
-        tempC: -1,
+        temp: (mode === "full" || mode === "labels") && hw.cpuTempC > 0 ? tempText(hw.cpuTempC) : "",
+        tempC: hw.cpuTempC,
         clock: Model.formatGhzShort(hw.cpuMhz),
         ratio: hw.cpuPercent >= 0 ? hw.cpuPercent / 100 : 0,
         severity: Model.severity(hw.cpuPercent, warnPercent, criticalPercent)
       }
     }
 
-    // CPU Temperature
-    if (showCpuTemp && hw.cpuTempC > 0 && showTemps) {
+    // CPU Temperature (standalone cell used in 'icons' mode)
+    if (showCpuTemp && hw.cpuTempC > 0 && showTemps && mode === "icons") {
       cellMap["cpu-temp"] = {
         key: "cpu-temp",
         label: "TEMP",
@@ -296,8 +296,8 @@ Panel {
       }
     }
 
-    // GPU Temperature (opt-in)
-    if (showGpuTemp && hw.hasGpu && hw.gpuTempC > 0 && showTemps) {
+    // GPU Temperature (standalone cell used in 'icons' mode)
+    if (showGpuTemp && hw.hasGpu && hw.gpuTempC > 0 && showTemps && mode === "icons") {
       cellMap["gpu-temp"] = {
         key: "gpu-temp",
         label: "GPU°",
