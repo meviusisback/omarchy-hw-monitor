@@ -8,7 +8,7 @@ import qs.Commons
 import "Model.js" as Model
 
 // First-class Omarchy system popup panel displaying visual telemetry for CPU,
-// GPU, Memory, and live CPU load history.
+// GPU, Memory, and live CPU load history, with an interactive settings drawer.
 KeyboardPanel {
   id: root
 
@@ -19,7 +19,25 @@ KeyboardPanel {
   property int warnTempC: 75
   property int criticalTempC: 90
 
+  property string mode: "icons"
+  property bool showGpu: true
+  property bool showCpu: true
+  property bool showCpuTemp: true
+  property bool showGpuTemp: false
+  property bool showRam: true
+  property bool showClocks: false
+  property bool showGauges: false
+  property string ramFormat: "used/total"
+  property string tempFormat: "degree-unit"
+  property bool settingsOpen: false
+
   signal fahrenheitToggled()
+
+  function persistSetting(key, value) {
+    if (root.owner && typeof root.owner.persistSetting === "function") {
+      root.owner.persistSetting(key, value)
+    }
+  }
 
   function toggleFahrenheit() {
     if (root.owner && typeof root.owner.toggleFahrenheit === "function") {
@@ -91,11 +109,12 @@ KeyboardPanel {
       root.cpuHistory = [initial, initial]
     } else {
       root.cpuHistory = []
+      root.settingsOpen = false
     }
   }
 
   focusTarget: keyCatcher
-  contentWidth: fittedContentWidth(Style.space(430))
+  contentWidth: fittedContentWidth(Style.space(500))
   contentHeight: fittedContentHeight(panelColumn.implicitHeight + Style.space(16), Style.space(960))
 
   PanelKeyCatcher {
@@ -108,6 +127,8 @@ KeyboardPanel {
         hw.sample()
       } else if (t === "c" || t === "C" || t === "f" || t === "F") {
         root.toggleFahrenheit()
+      } else if (t === "s" || t === "S") {
+        root.settingsOpen = !root.settingsOpen
       }
     }
 
@@ -146,81 +167,331 @@ KeyboardPanel {
         width: scrollArea.availableWidth
         spacing: Style.space(12)
 
-        // 1. Header with Processor Name and °C/°F Unit Toggle
-        Row {
+        // 1. Header with Processor Name and Settings Gear
+        Item {
           width: parent.width
-          spacing: Style.space(12)
+          implicitHeight: Math.max(headerLeft.implicitHeight, settingsButton.implicitHeight)
 
-          Text {
-            textFormat: Text.PlainText
-            text: ""
-            color: Color.accent
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.display
+          Row {
+            id: headerLeft
+            anchors.left: parent.left
+            anchors.right: settingsButton.left
+            anchors.rightMargin: Style.space(10)
             anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.space(10)
+
+            Text {
+              textFormat: Text.PlainText
+              text: ""
+              color: Color.accent
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.display
+              anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Column {
+              width: parent.width - Style.font.display - Style.space(10)
+              anchors.verticalCenter: parent.verticalCenter
+              spacing: Style.space(2)
+
+              Text {
+                textFormat: Text.PlainText
+                text: "Hardware"
+                color: root.baseColor
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.title
+                font.bold: true
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                wrapMode: Text.Wrap
+                text: hw.cpuInfo && hw.cpuInfo.model ? hw.cpuInfo.model : "System Telemetry"
+                color: root.dimColor
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+            }
+          }
+
+          // Gear Icon for In-Panel Settings
+          ModeChip {
+            id: settingsButton
+            label: "\uF013"
+            selected: root.settingsOpen
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            onPicked: root.settingsOpen = !root.settingsOpen
+          }
+        }
+
+        // Animated Settings Drawer
+        Rectangle {
+          width: parent.width
+          visible: root.settingsOpen || height > 0
+          height: root.settingsOpen ? settingsCol.implicitHeight + Style.space(20) : 0
+          clip: true
+          color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.05)
+          border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.14)
+          border.width: 1
+          radius: Style.cornerRadius
+
+          Behavior on height {
+            NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+          }
+          opacity: root.settingsOpen ? 1 : 0
+          Behavior on opacity {
+            NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
           }
 
           Column {
-            width: Math.max(0, parent.width - Style.font.display - Style.space(12) - unitToggleRow.implicitWidth - Style.space(12))
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Style.space(2)
+            id: settingsCol
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.margins: Style.space(10)
+            spacing: Style.space(10)
 
-            Text {
-              textFormat: Text.PlainText
-              text: "Hardware"
-              color: root.baseColor
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.title
-              font.bold: true
-            }
-
-            Text {
-              textFormat: Text.PlainText
+            // Settings Header
+            Row {
               width: parent.width
-              wrapMode: Text.Wrap
-              text: hw.cpuInfo && hw.cpuInfo.model ? hw.cpuInfo.model : "System Telemetry"
-              color: root.dimColor
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: true
-            }
-          }
+              spacing: Style.space(6)
 
-          Item {
-            height: 1
-            width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[1].width - unitToggleRow.implicitWidth - Style.space(24))
-          }
+              Text {
+                textFormat: Text.PlainText
+                text: ""
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                anchors.verticalCenter: parent.verticalCenter
+              }
 
-          Row {
-            id: unitToggleRow
-            spacing: Style.space(6)
-            anchors.verticalCenter: parent.verticalCenter
-
-            Text {
-              textFormat: Text.PlainText
-              text: "°C"
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: !root.fahrenheit
-              color: !root.fahrenheit ? root.baseColor : Qt.darker(root.baseColor, 1.8)
-              anchors.verticalCenter: parent.verticalCenter
+              Text {
+                textFormat: Text.PlainText
+                text: "Top Bar Display Settings"
+                color: root.baseColor
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
+              }
             }
 
-            ToggleSwitch {
-              id: unitSwitch
-              checked: root.fahrenheit
-              anchors.verticalCenter: parent.verticalCenter
-              onToggled: root.toggleFahrenheit()
+            // Readout Mode
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                width: Style.space(48)
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Mode"
+                color: Qt.darker(root.baseColor, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Flow {
+                width: parent.width - Style.space(56)
+                spacing: Style.space(4)
+
+                ModeChip {
+                  label: "Icons"
+                  selected: root.mode === "icons"
+                  onPicked: root.persistSetting("mode", "icons")
+                }
+                ModeChip {
+                  label: "Compact"
+                  selected: root.mode === "compact"
+                  onPicked: root.persistSetting("mode", "compact")
+                }
+                ModeChip {
+                  label: "Full"
+                  selected: root.mode === "full"
+                  onPicked: root.persistSetting("mode", "full")
+                }
+                ModeChip {
+                  label: "Labels"
+                  selected: root.mode === "labels"
+                  onPicked: root.persistSetting("mode", "labels")
+                }
+              }
             }
 
-            Text {
-              textFormat: Text.PlainText
-              text: "°F"
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              font.bold: root.fahrenheit
-              color: root.fahrenheit ? root.baseColor : Qt.darker(root.baseColor, 1.8)
-              anchors.verticalCenter: parent.verticalCenter
+            // Show Components
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                width: Style.space(48)
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Show"
+                color: Qt.darker(root.baseColor, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Flow {
+                width: parent.width - Style.space(56)
+                spacing: Style.space(4)
+
+                ModeChip {
+                  label: "󰾲 GPU"
+                  selected: root.showGpu
+                  onPicked: root.persistSetting("showGpu", !root.showGpu)
+                }
+                ModeChip {
+                  label: " CPU"
+                  selected: root.showCpu
+                  onPicked: root.persistSetting("showCpu", !root.showCpu)
+                }
+                ModeChip {
+                  label: " CPU Temp"
+                  selected: root.showCpuTemp
+                  onPicked: root.persistSetting("showCpuTemp", !root.showCpuTemp)
+                }
+                ModeChip {
+                  label: "󰔏 GPU Temp"
+                  selected: root.showGpuTemp
+                  onPicked: root.persistSetting("showGpuTemp", !root.showGpuTemp)
+                }
+                ModeChip {
+                  label: " RAM"
+                  selected: root.showRam
+                  onPicked: root.persistSetting("showRam", !root.showRam)
+                }
+                ModeChip {
+                  label: "󰓅 Clocks"
+                  selected: root.showClocks
+                  onPicked: root.persistSetting("showClocks", !root.showClocks)
+                }
+                ModeChip {
+                  label: "󰁹 Gauges"
+                  selected: root.showGauges
+                  onPicked: root.persistSetting("showGauges", !root.showGauges)
+                }
+              }
+            }
+
+            // RAM Format
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                width: Style.space(48)
+                anchors.verticalCenter: parent.verticalCenter
+                text: "RAM"
+                color: Qt.darker(root.baseColor, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Flow {
+                width: parent.width - Style.space(56)
+                spacing: Style.space(4)
+
+                ModeChip {
+                  label: "Used/Total"
+                  selected: root.ramFormat === "used/total"
+                  onPicked: root.persistSetting("ramFormat", "used/total")
+                }
+                ModeChip {
+                  label: "Used"
+                  selected: root.ramFormat === "used"
+                  onPicked: root.persistSetting("ramFormat", "used")
+                }
+                ModeChip {
+                  label: "Percent"
+                  selected: root.ramFormat === "percent"
+                  onPicked: root.persistSetting("ramFormat", "percent")
+                }
+                ModeChip {
+                  label: "Free"
+                  selected: root.ramFormat === "free"
+                  onPicked: root.persistSetting("ramFormat", "free")
+                }
+              }
+            }
+
+            // Temperature Unit
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                width: Style.space(48)
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Unit"
+                color: Qt.darker(root.baseColor, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Flow {
+                width: parent.width - Style.space(56)
+                spacing: Style.space(4)
+
+                ModeChip {
+                  label: "°C  Celsius"
+                  selected: !root.fahrenheit
+                  onPicked: root.persistSetting("fahrenheit", false)
+                }
+                ModeChip {
+                  label: "°F  Fahrenheit"
+                  selected: root.fahrenheit
+                  onPicked: root.persistSetting("fahrenheit", true)
+                }
+              }
+            }
+
+            // Temp Format
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                width: Style.space(48)
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Temp"
+                color: Qt.darker(root.baseColor, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Flow {
+                width: parent.width - Style.space(56)
+                spacing: Style.space(4)
+
+                ModeChip {
+                  label: root.fahrenheit ? "45°F" : "45°C"
+                  selected: root.tempFormat === "degree-unit"
+                  onPicked: root.persistSetting("tempFormat", "degree-unit")
+                }
+                ModeChip {
+                  label: "45°"
+                  selected: root.tempFormat === "degree"
+                  onPicked: root.persistSetting("tempFormat", "degree")
+                }
+                ModeChip {
+                  label: root.fahrenheit ? "45F" : "45C"
+                  selected: root.tempFormat === "unit"
+                  onPicked: root.persistSetting("tempFormat", "unit")
+                }
+                ModeChip {
+                  label: "45"
+                  selected: root.tempFormat === "bare"
+                  onPicked: root.persistSetting("tempFormat", "bare")
+                }
+              }
             }
           }
         }
@@ -777,6 +1048,46 @@ KeyboardPanel {
           height: Style.space(12)
         }
       }
+    }
+  }
+
+  // Interactive settings chip
+  component ModeChip: Rectangle {
+    id: chip
+    property string label: ""
+    property bool selected: false
+    property color activeColor: Color.accent
+    signal picked()
+
+    implicitWidth: chipLabel.implicitWidth + Style.space(12)
+    implicitHeight: chipLabel.implicitHeight + Style.space(8)
+    radius: Style.cornerRadius
+    color: chip.selected ? activeColor : (chipMouse.containsMouse ? Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12) : Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.06))
+    border.color: chip.selected ? activeColor : Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
+    border.width: 1
+
+    Behavior on color { ColorAnimation { duration: 140 } }
+    Behavior on border.color { ColorAnimation { duration: 140 } }
+
+    scale: chipMouse.pressed ? 0.95 : 1
+    Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+
+    Text {
+      id: chipLabel
+      anchors.centerIn: parent
+      text: chip.label
+      color: chip.selected ? Color.foreground : root.baseColor
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      font.bold: chip.selected
+    }
+
+    MouseArea {
+      id: chipMouse
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onClicked: chip.picked()
     }
   }
 

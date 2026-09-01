@@ -431,6 +431,17 @@ Panel {
     return root.settings || {}
   }
 
+  function persistSetting(key, value) {
+    var live = currentEntry()
+    var entry = { id: root.moduleName }
+    for (var k in live) if (k !== "id") entry[k] = live[k]
+    entry[key] = value
+    root.settings = entry
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function") {
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
+    }
+  }
+
   function cycleMode() {
     var live = currentEntry()
 
@@ -438,24 +449,11 @@ Panel {
     if (modes.indexOf(from) === -1) from = mode
     var next = modes[(modes.indexOf(from) + 1) % modes.length]
 
-    var entry = { id: root.moduleName }
-    for (var key in live) if (key !== "id") entry[key] = live[key]
-    entry.mode = next
-
-    root.settings = entry
-    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
-      root.bar.shell.updateEntryInline(root.moduleName, entry)
+    persistSetting("mode", next)
   }
 
   function toggleFahrenheit() {
-    var live = currentEntry()
-    var next = !fahrenheit
-    var entry = { id: root.moduleName }
-    for (var key in live) if (key !== "id") entry[key] = live[key]
-    entry.fahrenheit = next
-    root.settings = entry
-    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
-      root.bar.shell.updateEntryInline(root.moduleName, entry)
+    persistSetting("fahrenheit", !fahrenheit)
   }
 
   function launchMonitor() {
@@ -541,6 +539,16 @@ Panel {
     owner: root
     open: root.opened
     hw: hw
+    mode: root.mode
+    showGpu: root.showGpu
+    showCpu: root.showCpu
+    showCpuTemp: root.showCpuTemp
+    showGpuTemp: root.showGpuTemp
+    showRam: root.showRam
+    showClocks: root.showClocks
+    showGauges: root.showGauges
+    ramFormat: root.ramFormat
+    tempFormat: root.tempFormat
     fahrenheit: root.fahrenheit
     warnPercent: root.warnPercent
     criticalPercent: root.criticalPercent
