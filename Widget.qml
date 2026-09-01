@@ -5,8 +5,8 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// GPU, CPU, Temperature, and RAM as a row of sleek telemetry readouts: component glyphs,
-// clean live numbers, and temperatures in the bar, with a first-class visual popup panel.
+// Telemetry readouts for GPU, CPU, Temperatures, and Memory in the Omarchy bar
+// with rich per-item data selection, ordering, and formatting controls.
 //
 // Left click opens the Omarchy system panel popup (or runs clickCommand if set).
 // Right click walks the display modes and remembers the choice; middle click resamples.
@@ -27,9 +27,9 @@ Panel {
   }
 
   // Four states, cycled by right click:
-  //   icons    GPU load + CPU load + CPU temperature + RAM (Noctalia-style sleek readout, default)
+  //   icons    Sleek component glyphs + live figures (Noctalia-style readout, default)
   //   compact  glyphs + gauges
-  //   full     glyphs + gauges + temperature
+  //   full     glyphs + gauges + temperatures
   //   labels   Waybar-style text readout — GPU 0% · CPU 34% · TEMP 46°C · RAM 11/23G
   readonly property var modes: ["icons", "compact", "full", "labels"]
   readonly property string mode: {
@@ -60,14 +60,43 @@ Panel {
   readonly property bool onThisScreen: monitors.length === 0 || screenName === ""
     || monitors.indexOf(screenName) !== -1
 
+  // -------------------------------------------------------- data selection
+
   readonly property bool showGpu: boolSetting("showGpu", true)
   readonly property bool showCpu: boolSetting("showCpu", true)
   readonly property bool showCpuTemp: boolSetting("showCpuTemp", true)
+  readonly property bool showGpuTemp: boolSetting("showGpuTemp", false)
   readonly property bool showRam: boolSetting("showRam", true)
+
+  readonly property var itemOrder: {
+    var raw = setting("itemsOrder", ["gpu", "cpu", "cpu-temp", "ram"])
+    if (raw instanceof Array) return raw.map(function(s) { return String(s).trim().toLowerCase() })
+    var text = String(raw || "").trim().toLowerCase()
+    return text === "" ? ["gpu", "cpu", "cpu-temp", "ram"] : text.split(/[,\s]+/)
+  }
+
+  // ------------------------------------------------------------ formatting
+
   readonly property bool fahrenheit: boolSetting("fahrenheit", false)
   readonly property string ramFormat: {
     var want = String(setting("ramFormat", "used/total")).trim().toLowerCase()
-    return ["used/total", "used", "percent"].indexOf(want) === -1 ? "used/total" : want
+    return ["used/total", "used", "percent", "free", "available"].indexOf(want) === -1 ? "used/total" : want
+  }
+
+  readonly property string tempFormat: {
+    var want = String(setting("tempFormat", "degree-unit")).trim().toLowerCase()
+    return ["degree-unit", "degree", "unit", "unit-lower", "bare"].indexOf(want) === -1 ? "degree-unit" : want
+  }
+
+  readonly property string percentPad: {
+    var want = String(setting("percentPad", mode === "icons" ? "none" : "zero")).trim().toLowerCase()
+    if (want === "space") want = "trail"
+    return ["lead", "zero", "trail", "none"].indexOf(want) === -1 ? (mode === "icons" ? "none" : "zero") : want
+  }
+
+  readonly property real padOpacity: {
+    var n = Number(setting("padOpacity", 0.3))
+    return isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.3
   }
 
   readonly property int iconSizeSetting: intSetting("iconSize", 0, 0, 48)
@@ -81,11 +110,19 @@ Panel {
 
   readonly property string clickCommand: String(setting("clickCommand", ""))
 
+  // ----------------------------------------------------------------- glyphs
+
   readonly property string gpuIcon: String(setting("gpuIcon", "󰾲"))
   readonly property string cpuIcon: String(setting("cpuIcon", ""))
   readonly property string tempIcon: String(setting("tempIcon", ""))
+  readonly property string gpuTempIcon: String(setting("gpuTempIcon", "󰔏"))
   readonly property string ramIcon: String(setting("ramIcon", ""))
   readonly property string clockIcon: String(setting("clockIcon", "󰓅"))
+
+  readonly property int gpuIconRotation: intSetting("gpuIconRotation", 0, -360, 360)
+  readonly property int cpuIconRotation: intSetting("cpuIconRotation", 0, -360, 360)
+  readonly property int tempIconRotation: intSetting("tempIconRotation", 0, -360, 360)
+  readonly property int ramIconRotation: intSetting("ramIconRotation", 0, -360, 360)
 
   function boolSetting(name, fallback) {
     var value = setting(name, fallback)
@@ -95,11 +132,6 @@ Panel {
     if (["false", "0", "no", "off"].indexOf(text) !== -1) return false
     return fallback
   }
-
-  readonly property int gpuIconRotation: intSetting("gpuIconRotation", 0, -360, 360)
-  readonly property int cpuIconRotation: intSetting("cpuIconRotation", 0, -360, 360)
-  readonly property int tempIconRotation: intSetting("tempIconRotation", 0, -360, 360)
-  readonly property int ramIconRotation: intSetting("ramIconRotation", 0, -360, 360)
 
   function intSetting(name, fallback, min, max) {
     var n = parseInt(String(setting(name, fallback)), 10)
@@ -133,17 +165,6 @@ Panel {
                    base.a)
   }
 
-  readonly property string percentPad: {
-    var want = String(setting("percentPad", mode === "icons" ? "none" : "zero")).trim().toLowerCase()
-    if (want === "space") want = "trail"
-    return ["lead", "zero", "trail", "none"].indexOf(want) === -1 ? (mode === "icons" ? "none" : "zero") : want
-  }
-
-  readonly property real padOpacity: {
-    var n = Number(setting("padOpacity", 0.3))
-    return isFinite(n) ? Math.max(0, Math.min(1, n)) : 0.3
-  }
-
   readonly property int percentSlot: Math.ceil(percentMetrics.advanceWidth)
 
   TextMetrics {
@@ -159,11 +180,6 @@ Panel {
     id: hw
     settings: root.settings
     active: root.onThisScreen
-  }
-
-  readonly property string tempFormat: {
-    var want = String(setting("tempFormat", "degree-unit")).trim().toLowerCase()
-    return ["degree-unit", "degree", "unit", "unit-lower", "bare"].indexOf(want) === -1 ? "degree-unit" : want
   }
 
   function percentPadFor(value) {
@@ -196,9 +212,14 @@ Panel {
 
     var usedGib = Model.gibFromKib(hw.memory.usedKib)
     var totalGib = Model.gibFromKib(hw.memory.totalKib)
+    var availGib = Model.gibFromKib(hw.memory.availableKib)
 
     if (ramFormat === "used") {
       return Model.formatGibPrecise(usedGib) + "G"
+    }
+
+    if (ramFormat === "free" || ramFormat === "available") {
+      return Model.formatGibPrecise(availGib) + "G"
     }
 
     if (labelled) {
@@ -214,15 +235,16 @@ Panel {
     return Model.padLeft(used, 3) + "/" + total
   }
 
-  // Desired Order: GPU Load -> CPU Load -> CPU Temperature -> RAM
-  readonly property var cells: {
-    var out = []
+  // ------------------------------------------------------------- cell output
 
-    // 1. GPU Load (no GPU temp)
+  readonly property var cells: {
+    var cellMap = {}
+
+    // GPU Load
     if (showGpu && hw.hasGpu) {
       var busy = hw.gpuPercent
       var meterValue = busy >= 0 ? busy : hw.gpuVramPercent
-      out.push({
+      cellMap["gpu"] = {
         key: "gpu",
         label: "GPU",
         icon: gpuIcon,
@@ -235,12 +257,12 @@ Panel {
         clock: Model.formatGhzShort(hw.gpuMhz),
         ratio: meterValue >= 0 ? meterValue / 100 : 0,
         severity: Model.severity(busy, warnPercent, criticalPercent)
-      })
+      }
     }
 
-    // 2. CPU Load
+    // CPU Load
     if (showCpu) {
-      out.push({
+      cellMap["cpu"] = {
         key: "cpu",
         label: "CPU",
         icon: cpuIcon,
@@ -253,12 +275,12 @@ Panel {
         clock: Model.formatGhzShort(hw.cpuMhz),
         ratio: hw.cpuPercent >= 0 ? hw.cpuPercent / 100 : 0,
         severity: Model.severity(hw.cpuPercent, warnPercent, criticalPercent)
-      })
+      }
     }
 
-    // 3. CPU Temperature with battery icon + number
+    // CPU Temperature
     if (showCpuTemp && hw.cpuTempC > 0 && showTemps) {
-      out.push({
+      cellMap["cpu-temp"] = {
         key: "cpu-temp",
         label: "TEMP",
         icon: tempIcon,
@@ -271,12 +293,30 @@ Panel {
         clock: "",
         ratio: Math.min(1, Math.max(0, (hw.cpuTempC - 30) / Math.max(1, criticalTempC - 30))),
         severity: Model.severity(hw.cpuTempC, warnTempC, criticalTempC)
-      })
+      }
     }
 
-    // 4. RAM
+    // GPU Temperature (opt-in)
+    if (showGpuTemp && hw.hasGpu && hw.gpuTempC > 0 && showTemps) {
+      cellMap["gpu-temp"] = {
+        key: "gpu-temp",
+        label: "GPU°",
+        icon: gpuTempIcon,
+        iconRotation: gpuIconRotation,
+        value: tempText(hw.gpuTempC),
+        pad: "",
+        slotted: false,
+        temp: "",
+        tempC: hw.gpuTempC,
+        clock: "",
+        ratio: Math.min(1, Math.max(0, (hw.gpuTempC - 30) / Math.max(1, criticalTempC - 30))),
+        severity: Model.severity(hw.gpuTempC, warnTempC, criticalTempC)
+      }
+    }
+
+    // RAM
     if (showRam) {
-      out.push({
+      cellMap["ram"] = {
         key: "ram",
         label: "RAM",
         icon: ramIcon,
@@ -289,7 +329,26 @@ Panel {
         clock: "",
         ratio: hw.memPercent >= 0 ? hw.memPercent / 100 : 0,
         severity: Model.severity(hw.memPercent, warnPercent, criticalPercent)
-      })
+      }
+    }
+
+    var out = []
+    var added = {}
+    for (var i = 0; i < itemOrder.length; i++) {
+      var k = itemOrder[i]
+      if (cellMap[k] && !added[k]) {
+        out.push(cellMap[k])
+        added[k] = true
+      }
+    }
+    // Append any enabled items not in itemOrder
+    var fallbackOrder = ["gpu", "cpu", "cpu-temp", "gpu-temp", "ram"]
+    for (var j = 0; j < fallbackOrder.length; j++) {
+      var fk = fallbackOrder[j]
+      if (cellMap[fk] && !added[fk]) {
+        out.push(cellMap[fk])
+        added[fk] = true
+      }
     }
 
     return out
@@ -311,7 +370,7 @@ Panel {
     var lines = []
 
     var cpu = "CPU  " + Model.formatPercent(hw.cpuPercent)
-    if (hw.cpuTempC > 0) cpu += "  ·  " + Model.formatTemp(hw.cpuTempC, fahrenheit) + (fahrenheit ? "F" : "C")
+    if (hw.cpuTempC > 0) cpu += "  ·  " + Model.formatTemp(hw.cpuTempC, fahrenheit)
     if (hw.cpuMhz > 0) cpu += "  ·  " + Model.formatGhz(hw.cpuMhz)
     lines.push(cpu)
     if (hw.cpuInfo && hw.cpuInfo.model) {
@@ -502,6 +561,8 @@ Panel {
         ? Math.max(0, root.percentSlot - valueText.implicitWidth - spacing)
         : 0
 
+      readonly property bool isTempCell: modelData.key === "cpu-temp" || modelData.key === "gpu-temp"
+
       TextMetrics {
         id: glyphMetrics
         font.family: root.fontFamily
@@ -525,7 +586,7 @@ Panel {
           text: modelData.icon
           fontFamily: root.fontFamily
           fontSize: root.iconSize
-          color: modelData.key === "cpu-temp"
+          color: group.isTempCell
             ? root.tempColor(modelData.tempC)
             : root.warm(Color.accent, modelData.severity)
           Behavior on color { ColorAnimation { duration: 240 } }
@@ -536,7 +597,7 @@ Panel {
           visible: modelData.iconRotation !== 0
           rotation: modelData.iconRotation
           text: modelData.icon
-          color: modelData.key === "cpu-temp"
+          color: group.isTempCell
             ? root.tempColor(modelData.tempC)
             : root.warm(Color.accent, modelData.severity)
           font.family: root.fontFamily
@@ -552,7 +613,7 @@ Panel {
         bodyWidth: root.gaugeWidth
         bodyHeight: root.gaugeHeight
         ratio: modelData.ratio
-        fillColor: modelData.key === "cpu-temp" ? root.tempColor(modelData.tempC) : root.warm(root.base, modelData.severity)
+        fillColor: group.isTempCell ? root.tempColor(modelData.tempC) : root.warm(root.base, modelData.severity)
         trackColor: Qt.rgba(root.base.r, root.base.g, root.base.b, 0.14)
         borderColor: Qt.rgba(root.base.r, root.base.g, root.base.b, 0.4)
         glow: modelData.severity >= 1
@@ -591,12 +652,12 @@ Panel {
           id: valueText
           height: root.contentHeight
           text: modelData.value
-          color: modelData.key === "cpu-temp"
+          color: group.isTempCell
             ? root.tempColor(modelData.tempC)
             : root.warm(root.base, modelData.severity)
           font.family: root.fontFamily
           font.pixelSize: root.valueSize
-          font.bold: true
+          font.bold: !group.isTempCell
           verticalAlignment: Text.AlignVCenter
           renderType: Text.NativeRendering
           Behavior on color { ColorAnimation { duration: 240 } }

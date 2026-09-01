@@ -95,8 +95,8 @@ KeyboardPanel {
   }
 
   focusTarget: keyCatcher
-  contentWidth: fittedContentWidth(Style.space(420))
-  contentHeight: fittedContentHeight(panelColumn.implicitHeight, Style.space(680))
+  contentWidth: fittedContentWidth(Style.space(430))
+  contentHeight: fittedContentHeight(panelColumn.implicitHeight + Style.space(16), Style.space(960))
 
   PanelKeyCatcher {
     id: keyCatcher
@@ -133,11 +133,17 @@ KeyboardPanel {
       anchors.fill: parent
       clip: true
       Controls.ScrollBar.horizontal.policy: Controls.ScrollBar.AlwaysOff
-      Controls.ScrollBar.vertical.policy: panelColumn.implicitHeight > height ? Controls.ScrollBar.AsNeeded : Controls.ScrollBar.AlwaysOff
+      Controls.ScrollBar.vertical.policy: panelColumn.implicitHeight > scrollArea.height ? Controls.ScrollBar.AsNeeded : Controls.ScrollBar.AlwaysOff
+
+      Binding {
+        target: scrollArea.contentItem
+        property: "interactive"
+        value: panelColumn.implicitHeight > scrollArea.height
+      }
 
       Column {
         id: panelColumn
-        width: scrollArea.width
+        width: scrollArea.availableWidth
         spacing: Style.space(12)
 
         // 1. Header with Processor Name and °C/°F Unit Toggle
@@ -148,7 +154,7 @@ KeyboardPanel {
           Text {
             textFormat: Text.PlainText
             text: ""
-            color: root.baseColor
+            color: Color.accent
             font.family: root.fontFamily
             font.pixelSize: Style.font.display
             anchors.verticalCenter: parent.verticalCenter
@@ -201,8 +207,8 @@ KeyboardPanel {
             }
 
             ToggleSwitch {
+              id: unitSwitch
               checked: root.fahrenheit
-              trackHeight: Style.space(16)
               anchors.verticalCenter: parent.verticalCenter
               onToggled: root.toggleFahrenheit()
             }
@@ -219,526 +225,563 @@ KeyboardPanel {
           }
         }
 
-        // 2. Three Dials
+        // 2. Primary Telemetry Dials (CPU, RAM, GPU)
         Row {
-          id: dialsRow
-          anchors.horizontalCenter: parent.horizontalCenter
-          spacing: Style.space(10)
-
-          readonly property real dialSize: Math.floor((panelColumn.width - spacing * 2) / 3)
+          width: parent.width
+          spacing: Style.space(8)
 
           Dial {
-            label: "CPU"
-            diameter: dialsRow.dialSize
-            value: hw.cpuPercent >= 0 ? hw.cpuPercent : 0
+            id: cpuDial
+            width: (parent.width - parent.spacing * 2) / 3
+            title: "CPU"
             valueText: hw.cpuPercent >= 0 ? Math.round(hw.cpuPercent) + "%" : "–"
-            subText: hw.cpuTempC > 0
-              ? (Model.formatTemp(hw.cpuTempC, root.fahrenheit) + (root.fahrenheit ? "°F" : "°C"))
-              : (hw.cpuMhz > 0 ? Model.formatGhzShort(hw.cpuMhz) + " GHz" : "")
+            subText: hw.cpuTempC > 0 ? Model.formatTemp(hw.cpuTempC, root.fahrenheit) : ""
+            subTextColor: root.tempColor(hw.cpuTempC)
+            ratio: hw.cpuPercent >= 0 ? hw.cpuPercent / 100 : 0
             baseColor: root.baseColor
-            valueColor: root.warm(root.baseColor, Model.severity(hw.cpuPercent, root.warnPercent, root.criticalPercent))
-            subTextColor: hw.cpuTempC > 0 ? root.tempColor(hw.cpuTempC) : Qt.darker(root.baseColor, 1.4)
+            hotColor: root.hotColor
+            accentColor: Color.accent
+            severity: Model.severity(hw.cpuPercent, root.warnPercent, root.criticalPercent)
+            fontFamily: root.fontFamily
           }
 
           Dial {
-            label: "RAM"
-            diameter: dialsRow.dialSize
-            value: hw.memPercent >= 0 ? hw.memPercent : 0
+            id: memDial
+            width: (parent.width - parent.spacing * 2) / 3
+            title: "RAM"
             valueText: hw.memPercent >= 0 ? Math.round(hw.memPercent) + "%" : "–"
-            subText: hw.memory
-              ? (Model.formatGib(Model.gibFromKib(hw.memory.usedKib)) + "/" + Model.formatGib(Model.gibFromKib(hw.memory.totalKib)) + "G")
-              : ""
+            subText: hw.memory ? (Model.formatGib(Model.gibFromKib(hw.memory.usedKib)) + "/" + Model.formatGib(Model.gibFromKib(hw.memory.totalKib)) + "G") : ""
+            subTextColor: root.dimColor
+            ratio: hw.memPercent >= 0 ? hw.memPercent / 100 : 0
             baseColor: root.baseColor
-            valueColor: root.warm(root.baseColor, Model.severity(hw.memPercent, root.warnPercent, root.criticalPercent))
-            subTextColor: Qt.darker(root.baseColor, 1.4)
+            hotColor: root.hotColor
+            accentColor: Color.accent
+            severity: Model.severity(hw.memPercent, root.warnPercent, root.criticalPercent)
+            fontFamily: root.fontFamily
           }
 
           Dial {
-            label: "GPU"
-            diameter: dialsRow.dialSize
-            value: hw.hasGpu
-              ? (hw.gpuPercent >= 0 ? hw.gpuPercent : (hw.gpuVramPercent >= 0 ? hw.gpuVramPercent : 0))
-              : 0
-            valueText: hw.hasGpu
-              ? (hw.gpuPercent >= 0 ? Math.round(hw.gpuPercent) + "%" : (hw.gpuVramPercent >= 0 ? Math.round(hw.gpuVramPercent) + "%" : "–"))
-              : "N/A"
-            subText: hw.hasGpu && hw.gpuTempC > 0
-              ? (Model.formatTemp(hw.gpuTempC, root.fahrenheit) + (root.fahrenheit ? "°F" : "°C"))
-              : (hw.hasGpu && hw.gpuWatts >= 0 ? Model.formatWatts(hw.gpuWatts) : "")
+            id: gpuDial
+            width: (parent.width - parent.spacing * 2) / 3
+            title: "GPU"
+            valueText: hw.hasGpu ? (hw.gpuPercent >= 0 ? Math.round(hw.gpuPercent) + "%" : (hw.gpuVramPercent >= 0 ? Math.round(hw.gpuVramPercent) + "%" : "–")) : "N/A"
+            subText: hw.hasGpu && hw.gpuTempC > 0 ? Model.formatTemp(hw.gpuTempC, root.fahrenheit) : (hw.hasGpu && hw.gpuWatts >= 0 ? Model.formatWatts(hw.gpuWatts) : "")
+            subTextColor: root.tempColor(hw.gpuTempC)
+            ratio: hw.hasGpu ? (hw.gpuPercent >= 0 ? hw.gpuPercent / 100 : (hw.gpuVramPercent >= 0 ? hw.gpuVramPercent / 100 : 0)) : 0
             baseColor: root.baseColor
-            valueColor: hw.hasGpu
-              ? root.warm(root.baseColor, Math.max(Model.severity(hw.gpuPercent, root.warnPercent, root.criticalPercent),
-                                                   Model.severity(hw.gpuTempC, root.warnTempC, root.criticalTempC)))
-              : Qt.darker(root.baseColor, 1.4)
-            subTextColor: (hw.hasGpu && hw.gpuTempC > 0) ? root.tempColor(hw.gpuTempC) : Qt.darker(root.baseColor, 1.4)
+            hotColor: root.hotColor
+            accentColor: Color.accent
+            severity: hw.hasGpu ? Model.severity(hw.gpuPercent >= 0 ? hw.gpuPercent : hw.gpuVramPercent, root.warnPercent, root.criticalPercent) : 0
+            fontFamily: root.fontFamily
           }
         }
 
-        // 3. History Sparkline
-        PanelSeparator { foreground: root.baseColor }
-
-        Column {
+        // 3. CPU Load History Sparkline (60s)
+        Rectangle {
           width: parent.width
-          spacing: Style.space(6)
+          implicitHeight: sparklineCol.implicitHeight + Style.space(24)
+          color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
+          border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
+          border.width: 1
+          radius: Style.cornerRadius
 
-          PanelSectionHeader {
-            text: "CPU LOAD (60s HISTORY)"
-            foreground: root.baseColor
-            fontFamily: root.fontFamily
-          }
-
-          Item {
-            id: sparklineBox
-            width: parent.width
-            implicitHeight: Style.space(48)
-
-            Rectangle {
-              anchors.fill: parent
-              radius: Style.cornerRadius
-              color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
-              border.width: 1
-              border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
-            }
-
-            // 50% guideline
-            Rectangle {
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.left: parent.left
-              anchors.right: parent.right
-              anchors.margins: Style.space(4)
-              height: 1
-              color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.08)
-            }
-
-            Text {
-              textFormat: Text.PlainText
-              anchors.top: parent.top
-              anchors.right: parent.right
-              anchors.margins: Style.space(3)
-              text: "100%"
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              color: Qt.darker(root.baseColor, 1.6)
-            }
-
-            Text {
-              textFormat: Text.PlainText
-              anchors.verticalCenter: parent.verticalCenter
-              anchors.right: parent.right
-              anchors.rightMargin: Style.space(3)
-              text: "50%"
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              color: Qt.darker(root.baseColor, 1.6)
-            }
-
-            Text {
-              textFormat: Text.PlainText
-              anchors.bottom: parent.bottom
-              anchors.left: parent.left
-              anchors.margins: Style.space(3)
-              text: "60s"
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              color: Qt.darker(root.baseColor, 1.6)
-            }
-
-            Text {
-              textFormat: Text.PlainText
-              anchors.bottom: parent.bottom
-              anchors.right: parent.right
-              anchors.margins: Style.space(3)
-              text: "now"
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-              color: Qt.darker(root.baseColor, 1.6)
-            }
-
-            Shape {
-              anchors.fill: parent
-              preferredRendererType: Shape.CurveRenderer
-              visible: root.sparklinePoints.length >= 2
-
-              ShapePath {
-                strokeColor: "transparent"
-                fillColor: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.12)
-                startX: Style.space(4)
-                startY: sparklineBox.height - Style.space(4)
-
-                PathPolyline {
-                  path: root.sparklineFillPoints
-                }
-              }
-
-              ShapePath {
-                strokeWidth: Math.max(1.5, Style.space(2))
-                strokeColor: root.warm(Color.accent, Model.severity(hw.cpuPercent, root.warnPercent, root.criticalPercent))
-                fillColor: "transparent"
-                capStyle: ShapePath.RoundCap
-                joinStyle: ShapePath.RoundJoin
-                startX: root.sparklineFirst.x
-                startY: root.sparklineFirst.y
-
-                PathPolyline {
-                  path: root.sparklinePoints
-                }
-              }
-            }
-          }
-        }
-
-        // 4. Processor Section
-        PanelSeparator { foreground: root.baseColor }
-
-        Column {
-          width: parent.width
-          spacing: Style.space(6)
-
-          PanelSectionHeader {
-            text: "PROCESSOR"
-            foreground: root.baseColor
-            fontFamily: root.fontFamily
-          }
-
-          Row {
-            width: parent.width
-            spacing: Style.space(16)
-
-            Column {
-              width: (parent.width - parent.spacing) / 2
-              spacing: Style.spacing.labelGap
-
-              InfoPair { label: "Load"; value: Model.formatPercent(hw.cpuPercent) }
-              InfoPair { label: "Clock"; value: hw.cpuMhz > 0 ? Model.formatGhz(hw.cpuMhz) : "–" }
-              InfoPair {
-                label: "Cores";
-                value: hw.cpuInfo ? (hw.cpuInfo.cores + "C / " + hw.cpuInfo.threads + "T") : "–"
-              }
-            }
-
-            Column {
-              width: (parent.width - parent.spacing) / 2
-              spacing: Style.spacing.labelGap
-
-              InfoPair {
-                label: "Temperature"
-                value: hw.cpuTempC > 0 ? (Model.formatTemp(hw.cpuTempC, root.fahrenheit) + (root.fahrenheit ? "°F" : "°C")) : "–"
-                valueColor: root.tempColor(hw.cpuTempC)
-              }
-              InfoPair {
-                label: "Load Avg"
-                value: hw.load ? (hw.load.one.toFixed(2) + "  " + hw.load.five.toFixed(2) + "  " + hw.load.fifteen.toFixed(2)) : "–"
-              }
-            }
-          }
-
-          // 1/5/15 Load Average Meters
-          Row {
-            visible: hw.load !== null
-            width: parent.width
+          Column {
+            id: sparklineCol
+            anchors.fill: parent
+            anchors.margins: Style.space(12)
             spacing: Style.space(8)
 
-            readonly property real threads: hw.cpuInfo && hw.cpuInfo.threads > 0 ? hw.cpuInfo.threads : 1
-            readonly property real cellWidth: (width - spacing * 2) / 3
-
-            Column {
-              width: parent.cellWidth
-              spacing: Style.space(2)
-
-              Row {
-                width: parent.width
-                Text {
-                  textFormat: Text.PlainText
-                  text: "1m"
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  font.bold: true
-                  color: Qt.darker(root.baseColor, 1.4)
-                }
-                Item { width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth); height: 1 }
-                Text {
-                  textFormat: Text.PlainText
-                  text: hw.load ? hw.load.one.toFixed(2) : "0.00"
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  color: root.baseColor
-                }
-              }
-
-              Rectangle {
-                width: parent.width
-                height: Style.space(4)
-                radius: height / 2
-                color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
-
-                Rectangle {
-                  anchors.left: parent.left
-                  anchors.top: parent.top
-                  anchors.bottom: parent.bottom
-                  radius: parent.radius
-                  color: root.warm(root.baseColor, hw.load ? (hw.load.one / parent.parent.threads) - 0.7 : 0)
-                  width: hw.load ? Math.max(parent.height, Math.min(parent.width, parent.width * (hw.load.one / parent.parent.threads))) : 0
-                }
-              }
-            }
-
-            Column {
-              width: parent.cellWidth
-              spacing: Style.space(2)
-
-              Row {
-                width: parent.width
-                Text {
-                  textFormat: Text.PlainText
-                  text: "5m"
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  font.bold: true
-                  color: Qt.darker(root.baseColor, 1.4)
-                }
-                Item { width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth); height: 1 }
-                Text {
-                  textFormat: Text.PlainText
-                  text: hw.load ? hw.load.five.toFixed(2) : "0.00"
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  color: root.baseColor
-                }
-              }
-
-              Rectangle {
-                width: parent.width
-                height: Style.space(4)
-                radius: height / 2
-                color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
-
-                Rectangle {
-                  anchors.left: parent.left
-                  anchors.top: parent.top
-                  anchors.bottom: parent.bottom
-                  radius: parent.radius
-                  color: root.warm(root.baseColor, hw.load ? (hw.load.five / parent.parent.threads) - 0.7 : 0)
-                  width: hw.load ? Math.max(parent.height, Math.min(parent.width, parent.width * (hw.load.five / parent.parent.threads))) : 0
-                }
-              }
-            }
-
-            Column {
-              width: parent.cellWidth
-              spacing: Style.space(2)
-
-              Row {
-                width: parent.width
-                Text {
-                  textFormat: Text.PlainText
-                  text: "15m"
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  font.bold: true
-                  color: Qt.darker(root.baseColor, 1.4)
-                }
-                Item { width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth); height: 1 }
-                Text {
-                  textFormat: Text.PlainText
-                  text: hw.load ? hw.load.fifteen.toFixed(2) : "0.00"
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  color: root.baseColor
-                }
-              }
-
-              Rectangle {
-                width: parent.width
-                height: Style.space(4)
-                radius: height / 2
-                color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
-
-                Rectangle {
-                  anchors.left: parent.left
-                  anchors.top: parent.top
-                  anchors.bottom: parent.bottom
-                  radius: parent.radius
-                  color: root.warm(root.baseColor, hw.load ? (hw.load.fifteen / parent.parent.threads) - 0.7 : 0)
-                  width: hw.load ? Math.max(parent.height, Math.min(parent.width, parent.width * (hw.load.fifteen / parent.parent.threads))) : 0
-                }
-              }
-            }
-          }
-        }
-
-        // 5. Memory Section
-        PanelSeparator { foreground: root.baseColor }
-
-        Column {
-          width: parent.width
-          spacing: Style.space(6)
-
-          PanelSectionHeader {
-            text: "MEMORY"
-            foreground: root.baseColor
-            fontFamily: root.fontFamily
-          }
-
-          // Used / Total RAM progress bar
-          Column {
-            width: parent.width
-            spacing: Style.space(3)
-
-            InfoPair {
-              label: "Used / Total"
-              value: hw.memory
-                ? (Model.formatGibPrecise(Model.gibFromKib(hw.memory.usedKib)) + " / " + Model.formatGibPrecise(Model.gibFromKib(hw.memory.totalKib)) + " GiB (" + Math.round(hw.memPercent) + "%)")
-                : "–"
-            }
-
-            Rectangle {
+            Row {
               width: parent.width
-              height: Style.space(6)
-              radius: height / 2
-              color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
 
+              Text {
+                textFormat: Text.PlainText
+                text: "CPU Load History (60s)"
+                color: root.baseColor
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Item {
+                width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth)
+                height: 1
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                text: hw.cpuPercent >= 0 ? (Math.round(hw.cpuPercent) + "% current") : "–"
+                color: root.warm(root.baseColor, Model.severity(hw.cpuPercent, root.warnPercent, root.criticalPercent))
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+            }
+
+            Item {
+              id: sparklineBox
+              width: parent.width
+              height: Style.space(55)
+
+              // Background grid lines
               Rectangle {
                 anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                radius: parent.radius
-                color: root.warm(root.baseColor, Model.severity(hw.memPercent, root.warnPercent, root.criticalPercent))
-                width: hw.memPercent >= 0 ? Math.max(parent.height, Math.min(parent.width, parent.width * (hw.memPercent / 100))) : 0
-                Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+                anchors.right: parent.right
+                y: parent.height * 0.25
+                height: 1
+                color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.08)
               }
-            }
-          }
-
-          Row {
-            width: parent.width
-            spacing: Style.space(16)
-
-            Column {
-              width: (parent.width - parent.spacing) / 2
-              spacing: Style.spacing.labelGap
-
-              InfoPair {
-                label: "Available"
-                value: hw.memory ? (Model.formatGib(Model.gibFromKib(hw.memory.availableKib)) + " GiB") : "–"
-              }
-              InfoPair {
-                label: "Cached"
-                value: hw.memory ? (Model.formatGib(Model.gibFromKib(hw.memory.cachedKib)) + " GiB") : "–"
-              }
-            }
-
-            Column {
-              width: (parent.width - parent.spacing) / 2
-              spacing: Style.spacing.labelGap
-
-              InfoPair {
-                label: "Swap Total"
-                value: hw.memory && hw.memory.swapTotalKib > 0
-                  ? (Model.formatGib(Model.gibFromKib(hw.memory.swapTotalKib)) + " GiB")
-                  : "None"
-              }
-              InfoPair {
-                label: "Swap Used"
-                value: hw.memory && hw.memory.swapTotalKib > 0
-                  ? (Model.formatGib(Model.gibFromKib(hw.memory.swapUsedKib)) + " GiB (" + Math.round(100 * hw.memory.swapUsedKib / hw.memory.swapTotalKib) + "%)")
-                  : "–"
-              }
-            }
-          }
-        }
-
-        // 6. GPU Section with Full Characteristics (only shown when GPU is present)
-        PanelSeparator {
-          visible: hw.hasGpu
-          foreground: root.baseColor
-        }
-
-        Column {
-          visible: hw.hasGpu
-          width: parent.width
-          spacing: Style.space(6)
-
-          PanelSectionHeader {
-            text: "GRAPHICS"
-            foreground: root.baseColor
-            fontFamily: root.fontFamily
-          }
-
-          // Full GPU model name (wrapped without cutoff)
-          Text {
-            visible: hw.gpuInfo && hw.gpuInfo.name !== ""
-            width: parent.width
-            wrapMode: Text.Wrap
-            text: String(hw.gpuInfo ? hw.gpuInfo.name : "")
-            color: root.baseColor
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.bodySmall
-            font.bold: true
-          }
-
-          // VRAM progress bar if total VRAM is known
-          Column {
-            visible: hw.gpuVramTotalBytes > 0
-            width: parent.width
-            spacing: Style.space(3)
-
-            InfoPair {
-              label: "VRAM Used / Total"
-              value: hw.gpuVramTotalBytes > 0
-                ? (Model.formatGibPrecise(Model.gibFromBytes(hw.gpuVramUsedBytes)) + " / " + Model.formatGibPrecise(Model.gibFromBytes(hw.gpuVramTotalBytes)) + " GiB (" + Math.round(hw.gpuVramPercent) + "%)")
-                : "–"
-            }
-
-            Rectangle {
-              width: parent.width
-              height: Style.space(6)
-              radius: height / 2
-              color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
-
               Rectangle {
                 anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.bottom: parent.bottom
-                radius: parent.radius
-                color: root.warm(root.baseColor, Model.severity(hw.gpuVramPercent, root.warnPercent, root.criticalPercent))
-                width: hw.gpuVramPercent >= 0 ? Math.max(parent.height, Math.min(parent.width, parent.width * (hw.gpuVramPercent / 100))) : 0
-                Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+                anchors.right: parent.right
+                y: parent.height * 0.50
+                height: 1
+                color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.08)
+              }
+              Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                y: parent.height * 0.75
+                height: 1
+                color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.08)
+              }
+
+              // Sparkline fill area
+              Shape {
+                anchors.fill: parent
+                visible: root.sparklinePoints.length >= 2
+                layer.enabled: true
+                layer.samples: 4
+
+                ShapePath {
+                  strokeWidth: 0
+                  strokeColor: "transparent"
+                  fillColor: Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18)
+
+                  startX: root.sparklineFirst.x
+                  startY: root.sparklineFirst.y
+
+                  PathPolyline {
+                    path: root.sparklineFillPoints
+                  }
+                }
+              }
+
+              // Sparkline stroke line
+              Shape {
+                anchors.fill: parent
+                visible: root.sparklinePoints.length >= 2
+                layer.enabled: true
+                layer.samples: 4
+
+                ShapePath {
+                  strokeWidth: Style.space(2)
+                  strokeColor: Color.accent
+                  fillColor: "transparent"
+                  capStyle: ShapePath.RoundCap
+                  joinStyle: ShapePath.RoundJoin
+
+                  startX: root.sparklineFirst.x
+                  startY: root.sparklineFirst.y
+
+                  PathPolyline {
+                    path: root.sparklinePoints
+                  }
+                }
               }
             }
           }
+        }
 
-          Row {
-            width: parent.width
-            spacing: Style.space(16)
+        // 4. Processor Topology & Load Average
+        Rectangle {
+          width: parent.width
+          implicitHeight: procCol.implicitHeight + Style.space(24)
+          color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
+          border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
+          border.width: 1
+          radius: Style.cornerRadius
 
-            Column {
-              width: (parent.width - parent.spacing) / 2
-              spacing: Style.spacing.labelGap
+          Column {
+            id: procCol
+            anchors.fill: parent
+            anchors.margins: Style.space(12)
+            spacing: Style.space(10)
 
-              InfoPair { label: "Load"; value: hw.gpuPercent >= 0 ? Model.formatPercent(hw.gpuPercent) : "–" }
-              InfoPair {
-                label: "Temperature"
-                value: hw.gpuTempC > 0 ? (Model.formatTemp(hw.gpuTempC, root.fahrenheit) + (root.fahrenheit ? "°F" : "°C")) : "–"
-                valueColor: root.tempColor(hw.gpuTempC)
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Text {
+                textFormat: Text.PlainText
+                text: ""
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                anchors.verticalCenter: parent.verticalCenter
               }
-              InfoPair { label: "Power"; value: hw.gpuWatts >= 0 ? Model.formatWatts(hw.gpuWatts) : "–" }
+
+              Text {
+                textFormat: Text.PlainText
+                text: "Processor"
+                color: root.baseColor
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
+              }
             }
 
-            Column {
-              width: (parent.width - parent.spacing) / 2
-              spacing: Style.spacing.labelGap
+            // Specs
+            Row {
+              width: parent.width
+              spacing: Style.space(16)
 
-              InfoPair { label: "Clock"; value: hw.gpuMhz > 0 ? Model.formatGhz(hw.gpuMhz) : "–" }
-              InfoPair { label: "Fan"; value: hw.gpuRpm >= 0 ? Model.formatRpm(hw.gpuRpm) : "–" }
-              InfoPair { label: "Driver"; value: hw.gpuInfo && hw.gpuInfo.kind ? String(hw.gpuInfo.kind) : "–" }
+              Column {
+                width: (parent.width - parent.spacing) / 2
+                spacing: Style.spacing.labelGap
+
+                InfoPair {
+                  label: "Cores"
+                  value: hw.cpuInfo ? (hw.cpuInfo.cores + "C / " + hw.cpuInfo.threads + "T") : "–"
+                }
+                InfoPair {
+                  label: "Avg Clock"
+                  value: hw.cpuMhz > 0 ? Model.formatGhz(hw.cpuMhz) : "–"
+                }
+              }
+
+              Column {
+                width: (parent.width - parent.spacing) / 2
+                spacing: Style.spacing.labelGap
+
+                InfoPair {
+                  label: "Temperature"
+                  value: hw.cpuTempC > 0 ? Model.formatTemp(hw.cpuTempC, root.fahrenheit) : "–"
+                  valueColor: root.tempColor(hw.cpuTempC)
+                }
+                InfoPair {
+                  label: "Cur Load"
+                  value: hw.cpuPercent >= 0 ? Model.formatPercent(hw.cpuPercent) : "–"
+                  valueColor: root.warm(root.baseColor, Model.severity(hw.cpuPercent, root.warnPercent, root.criticalPercent))
+                }
+              }
+            }
+
+            // Load average 1m, 5m, 15m
+            Column {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Text {
+                textFormat: Text.PlainText
+                text: "Load Average (1m · 5m · 15m)"
+                color: Qt.darker(root.baseColor, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Row {
+                width: parent.width
+                spacing: Style.space(8)
+
+                readonly property real maxCores: hw.cpuInfo && hw.cpuInfo.threads ? hw.cpuInfo.threads : 8
+
+                LoadMeter {
+                  id: lm1
+                  width: (parent.width - parent.spacing * 2) / 3
+                  period: "1 min"
+                  value: hw.load ? hw.load.one : 0
+                  maxVal: parent.maxCores
+                  baseColor: root.baseColor
+                  hotColor: root.hotColor
+                  fontFamily: root.fontFamily
+                }
+
+                LoadMeter {
+                  id: lm5
+                  width: (parent.width - parent.spacing * 2) / 3
+                  period: "5 min"
+                  value: hw.load ? hw.load.five : 0
+                  maxVal: parent.maxCores
+                  baseColor: root.baseColor
+                  hotColor: root.hotColor
+                  fontFamily: root.fontFamily
+                }
+
+                LoadMeter {
+                  id: lm15
+                  width: (parent.width - parent.spacing * 2) / 3
+                  period: "15 min"
+                  value: hw.load ? hw.load.fifteen : 0
+                  maxVal: parent.maxCores
+                  baseColor: root.baseColor
+                  hotColor: root.hotColor
+                  fontFamily: root.fontFamily
+                }
+              }
             }
           }
+        }
+
+        // 5. Memory & Swap Breakdown
+        Rectangle {
+          width: parent.width
+          implicitHeight: memCol.implicitHeight + Style.space(24)
+          color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
+          border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
+          border.width: 1
+          radius: Style.cornerRadius
+
+          Column {
+            id: memCol
+            anchors.fill: parent
+            anchors.margins: Style.space(12)
+            spacing: Style.space(10)
+
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Text {
+                textFormat: Text.PlainText
+                text: ""
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                text: "Memory & Storage Cache"
+                color: root.baseColor
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
+              }
+            }
+
+            // RAM horizontal split progress
+            Column {
+              width: parent.width
+              spacing: Style.space(4)
+
+              Row {
+                width: parent.width
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: "RAM Usage"
+                  color: Qt.darker(root.baseColor, 1.4)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+
+                Item {
+                  width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth)
+                  height: 1
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: hw.memory ? (Model.formatGib(Model.gibFromKib(hw.memory.usedKib)) + " / " + Model.formatGib(Model.gibFromKib(hw.memory.totalKib)) + " GiB (" + Math.round(hw.memPercent) + "%)") : "–"
+                  color: root.warm(root.baseColor, Model.severity(hw.memPercent, root.warnPercent, root.criticalPercent))
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+              }
+
+              Rectangle {
+                width: parent.width
+                height: Style.space(6)
+                radius: height / 2
+                color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
+
+                Rectangle {
+                  anchors.left: parent.left
+                  anchors.top: parent.top
+                  anchors.bottom: parent.bottom
+                  radius: parent.radius
+                  color: root.warm(root.baseColor, Model.severity(hw.memPercent, root.warnPercent, root.criticalPercent))
+                  width: hw.memPercent >= 0 ? Math.max(parent.height, Math.min(parent.width, parent.width * (hw.memPercent / 100))) : 0
+                  Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+                }
+              }
+            }
+
+            // Details
+            Row {
+              width: parent.width
+              spacing: Style.space(16)
+
+              Column {
+                width: (parent.width - parent.spacing) / 2
+                spacing: Style.spacing.labelGap
+
+                InfoPair {
+                  label: "Available"
+                  value: hw.memory ? (Model.formatGib(Model.gibFromKib(hw.memory.availableKib)) + " GiB") : "–"
+                }
+                InfoPair {
+                  label: "Page Cache"
+                  value: hw.memory ? (Model.formatGib(Model.gibFromKib(hw.memory.cachedKib)) + " GiB") : "–"
+                }
+              }
+
+              Column {
+                width: (parent.width - parent.spacing) / 2
+                spacing: Style.spacing.labelGap
+
+                InfoPair {
+                  label: "Swap Used"
+                  value: hw.memory && hw.memory.swapTotalKib > 0 ? (Model.formatGib(Model.gibFromKib(hw.memory.swapUsedKib)) + " GiB") : "0 GiB"
+                }
+                InfoPair {
+                  label: "Swap Total"
+                  value: hw.memory && hw.memory.swapTotalKib > 0 ? (Model.formatGib(Model.gibFromKib(hw.memory.swapTotalKib)) + " GiB") : "None"
+                }
+              }
+            }
+          }
+        }
+
+        // 6. Graphics Telemetry Section (if GPU present)
+        Rectangle {
+          width: parent.width
+          implicitHeight: gpuCol.implicitHeight + Style.space(24)
+          color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
+          border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
+          border.width: 1
+          radius: Style.cornerRadius
+          visible: hw.hasGpu
+
+          Column {
+            id: gpuCol
+            anchors.fill: parent
+            anchors.margins: Style.space(12)
+            spacing: Style.space(10)
+
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Text {
+                textFormat: Text.PlainText
+                text: "󰾲"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                text: hw.gpuInfo && hw.gpuInfo.name ? hw.gpuInfo.name : "Graphics Adapter"
+                color: root.baseColor
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                wrapMode: Text.Wrap
+                anchors.verticalCenter: parent.verticalCenter
+              }
+            }
+
+            // VRAM Meter
+            Column {
+              width: parent.width
+              spacing: Style.space(4)
+              visible: hw.gpuVramTotalBytes > 0
+
+              Row {
+                width: parent.width
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: "VRAM"
+                  color: Qt.darker(root.baseColor, 1.4)
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+
+                Item {
+                  width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth)
+                  height: 1
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: hw.gpuVramTotalBytes > 0 ? (Model.formatGib(Model.gibFromBytes(hw.gpuVramUsedBytes)) + " / " + Model.formatGib(Model.gibFromBytes(hw.gpuVramTotalBytes)) + " GiB (" + Math.round(hw.gpuVramPercent) + "%)") : "–"
+                  color: root.warm(root.baseColor, Model.severity(hw.gpuVramPercent, root.warnPercent, root.criticalPercent))
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+              }
+
+              Rectangle {
+                width: parent.width
+                height: Style.space(6)
+                radius: height / 2
+                color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
+
+                Rectangle {
+                  anchors.left: parent.left
+                  anchors.top: parent.top
+                  anchors.bottom: parent.bottom
+                  radius: parent.radius
+                  color: root.warm(root.baseColor, Model.severity(hw.gpuVramPercent, root.warnPercent, root.criticalPercent))
+                  width: hw.gpuVramPercent >= 0 ? Math.max(parent.height, Math.min(parent.width, parent.width * (hw.gpuVramPercent / 100))) : 0
+                  Behavior on width { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+                }
+              }
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.space(16)
+
+              Column {
+                width: (parent.width - parent.spacing) / 2
+                spacing: Style.spacing.labelGap
+
+                InfoPair { label: "Load"; value: hw.gpuPercent >= 0 ? Model.formatPercent(hw.gpuPercent) : "–" }
+                InfoPair {
+                  label: "Temperature"
+                  value: hw.gpuTempC > 0 ? Model.formatTemp(hw.gpuTempC, root.fahrenheit) : "–"
+                  valueColor: root.tempColor(hw.gpuTempC)
+                }
+                InfoPair { label: "Power"; value: hw.gpuWatts >= 0 ? Model.formatWatts(hw.gpuWatts) : "–" }
+              }
+
+              Column {
+                width: (parent.width - parent.spacing) / 2
+                spacing: Style.spacing.labelGap
+
+                InfoPair { label: "Clock"; value: hw.gpuMhz > 0 ? Model.formatGhz(hw.gpuMhz) : "–" }
+                InfoPair { label: "Fan"; value: hw.gpuRpm >= 0 ? Model.formatRpm(hw.gpuRpm) : "–" }
+                InfoPair { label: "Driver"; value: hw.gpuInfo && hw.gpuInfo.kind ? String(hw.gpuInfo.kind) : "–" }
+              }
+            }
+          }
+        }
+
+        // Bottom breathing room spacer to guarantee zero clipping
+        Item {
+          width: parent.width
+          height: Style.space(12)
         }
       }
     }
   }
 
   component InfoPair: Row {
+    id: infoPairRoot
     property string label: ""
     property string value: ""
     property color valueColor: root.baseColor
@@ -748,7 +791,7 @@ KeyboardPanel {
 
     Text {
       textFormat: Text.PlainText
-      text: label
+      text: infoPairRoot.label
       color: Qt.darker(root.baseColor, 1.4)
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall
@@ -762,11 +805,72 @@ KeyboardPanel {
 
     Text {
       textFormat: Text.PlainText
-      text: value
-      color: valueColor
+      text: infoPairRoot.value
+      color: infoPairRoot.valueColor
       font.family: root.fontFamily
       font.pixelSize: Style.font.bodySmall
       Behavior on color { ColorAnimation { duration: 240 } }
+    }
+  }
+
+  component LoadMeter: Column {
+    id: meterRoot
+    property string period: ""
+    property real value: 0
+    property real maxVal: 8
+    property color baseColor: Color.foreground
+    property color hotColor: Color.urgent
+    property string fontFamily: Style.font.family
+
+    spacing: Style.space(4)
+
+    Row {
+      width: parent.width
+
+      Text {
+        textFormat: Text.PlainText
+        text: meterRoot.period
+        color: Qt.darker(meterRoot.baseColor, 1.4)
+        font.family: meterRoot.fontFamily
+        font.pixelSize: Style.font.caption
+      }
+
+      Item {
+        width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[2].implicitWidth)
+        height: 1
+      }
+
+      Text {
+        textFormat: Text.PlainText
+        text: meterRoot.value.toFixed(2)
+        color: meterRoot.baseColor
+        font.family: meterRoot.fontFamily
+        font.pixelSize: Style.font.caption
+        font.bold: true
+      }
+    }
+
+    Rectangle {
+      width: parent.width
+      height: Style.space(4)
+      radius: height / 2
+      color: Qt.rgba(meterRoot.baseColor.r, meterRoot.baseColor.g, meterRoot.baseColor.b, 0.12)
+
+      Rectangle {
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        radius: parent.radius
+        color: {
+          var ratio = meterRoot.maxVal > 0 ? Math.min(1, meterRoot.value / meterRoot.maxVal) : 0
+          return Qt.rgba(meterRoot.baseColor.r + (meterRoot.hotColor.r - meterRoot.baseColor.r) * ratio,
+                         meterRoot.baseColor.g + (meterRoot.hotColor.g - meterRoot.baseColor.g) * ratio,
+                         meterRoot.baseColor.b + (meterRoot.hotColor.b - meterRoot.baseColor.b) * ratio,
+                         meterRoot.baseColor.a)
+        }
+        width: meterRoot.maxVal > 0 ? Math.max(parent.height, Math.min(parent.width, parent.width * Math.min(1, meterRoot.value / meterRoot.maxVal))) : 0
+        Behavior on width { NumberAnimation { duration: 240 } }
+      }
     }
   }
 }

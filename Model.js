@@ -205,8 +205,8 @@ function tempNumber(celsius, fahrenheit) {
 
 function formatTemp(celsius, fahrenheit) {
   if (!isFinite(celsius) || celsius <= 0) return "–"
-  if (fahrenheit) return Math.round(celsius * 9 / 5 + 32) + "°"
-  return Math.round(celsius) + "°"
+  var deg = Math.round(fahrenheit ? celsius * 9 / 5 + 32 : celsius)
+  return deg + "°" + (fahrenheit ? "F" : "C")
 }
 
 function formatGhz(mhz) {

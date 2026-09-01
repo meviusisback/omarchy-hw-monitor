@@ -131,22 +131,28 @@ omarchy bar set io.github.edgarsilva.hw-monitor fahrenheit true --json
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `mode` | string | `"icons"` | `"icons"`, `"compact"`, `"full"`, or `"labels"`. Right-clicking cycles them. |
-| `refreshIntervalSec` | int | `2` | Seconds between samples. `1` is as fast as `FileView` makes sense; `5` is plenty for a background bar. |
-| `showGpu` | bool | `true` | Show GPU (hidden automatically if no card was found). |
-| `showCpu` | bool | `true` | Show CPU. |
-| `showCpuTemp` | bool | `true` | Show CPU temperature. |
-| `tempIcon` | string | `""` | Glyph marking temperature figure (e.g. `""` or `"󰔏"`). |
-| `showRam` | bool | `true` | Show memory. |
-| `showValues` | bool | `false` | Put percentages back on the row beside each gauge in `compact`/`full` modes. (`icons` and `labels` always show them). |
+| `itemsOrder` | array/string | `"gpu,cpu,cpu-temp,ram"` | Sequence of telemetry items in the top bar (`"gpu,cpu,cpu-temp,ram"` or `"gpu,cpu,cpu-temp,gpu-temp,ram"`). |
+| `showGpu` | bool | `true` | Show GPU load (hidden automatically if no card was found). |
+| `showCpu` | bool | `true` | Show CPU load. |
+| `showCpuTemp` | bool | `true` | Show CPU temperature with thermometer icon. |
+| `showGpuTemp` | bool | `false` | Show GPU temperature in the bar. |
+| `showRam` | bool | `true` | Show memory / RAM usage. |
+| `ramFormat` | string | `"used/total"` | `"used/total"` (`12/23G`), `"used"` (`12.3G`), `"percent"` (`52%`), `"free"` (`11.1G`), or `"available"` (`11.1G`). |
+| `tempFormat` | string | `"degree-unit"` | `"degree-unit"` (`45°C`), `"degree"` (`45°`), `"unit"` (`45C`), `"unit-lower"` (`45c`), or `"bare"` (`45`). |
+| `fahrenheit` | bool | `false` | Temperatures in °F instead of °C. |
+| `percentPad` | string | `"none"` | `"none"`, `"zero"`, `"lead"`, or `"trail"`. |
 | `showGauges` | bool | `false` | Show vertical capsule gauges. |
+| `showValues` | bool | `false` | Put percentages back on the row beside each gauge in `compact`/`full` modes. (`icons` and `labels` always show them). |
 | `showClocks` | bool | `false` | Show CPU and GPU clock speeds in GHz. |
+| `gpuIcon` | string | `"󰾲"` | Glyph marking the GPU figure. |
+| `cpuIcon` | string | `""` | Glyph marking the CPU figure. |
+| `tempIcon` | string | `""` | Glyph marking the CPU temperature figure. |
+| `gpuTempIcon` | string | `"󰔏"` | Glyph marking the GPU temperature figure. |
+| `ramIcon` | string | `""` | Glyph marking the RAM figure. |
 | `clockIcon` | string | `"󰓅"` | Glyph marking the clock figure. Empty draws the number alone. |
 | `iconSize` | int | `0` | Overall scale in pixels. `0` follows the bar's icon font. |
-| `ramFormat` | string | `"used/total"` | `"used/total"` (`11/23G`), `"used"` (`11.2G`), or `"percent"` (`49%`). |
-| `tempFormat` | string | `"degree-unit"` | `"degree-unit"` (`45°C`), `"degree"` (`45°`), `"unit"` (`45C`), `"unit-lower"` (`45c`), or `"bare"` (`45`). |
-| `percentPad` | string | `"none"` | `"none"`, `"zero"`, `"lead"`, or `"trail"`. |
+| `refreshIntervalSec` | int | `2` | Seconds between samples. `1` is as fast as `FileView` makes sense; `5` is plenty for a background bar. |
 | `gpu` | string | `"auto"` | `"auto"` picks the card reporting load; otherwise an index (`0`, `1`) or name substring. |
-| `fahrenheit` | bool | `false` | Temperatures in °F instead of °C. |
 | `warnPercent` | int | `70` | Load threshold where numbers and glyphs warm toward the urgent colour. |
 | `criticalPercent` | int | `90` | Load threshold where the gauge glows and color reaches full urgent. |
 | `warnTempC` | int | `75` | Temperature threshold (°C) where figures warm toward urgent. |

@@ -8,18 +8,32 @@ Item {
   id: root
 
   property string label: ""
+  property string title: ""
   property real value: 0
   property real max: 100
+  property real ratio: -1
   property string valueText: ""
   property string subText: ""
+  property int severity: 0
   property color baseColor: Color.foreground
-  property color valueColor: baseColor
+  property color accentColor: Color.accent
+  property color hotColor: Color.urgent
+  property color valueColor: {
+    if (severity >= 2) return hotColor
+    if (severity === 1) return Qt.rgba(baseColor.r + (hotColor.r - baseColor.r) * 0.6,
+                                       baseColor.g + (hotColor.g - baseColor.g) * 0.6,
+                                       baseColor.b + (hotColor.b - baseColor.b) * 0.6,
+                                       baseColor.a)
+    return accentColor
+  }
   property color subTextColor: Qt.darker(baseColor, 1.4)
   property color trackColor: Qt.rgba(baseColor.r, baseColor.g, baseColor.b, 0.14)
   property real diameter: Style.space(108)
   property real arcWidth: Math.max(3, Style.space(4))
+  property string fontFamily: Style.font.family
 
-  readonly property real fraction: max > 0 ? Math.max(0, Math.min(1, value / max)) : 0
+  readonly property string displayTitle: title !== "" ? title : label
+  readonly property real fraction: ratio >= 0 ? Math.max(0, Math.min(1, ratio)) : (max > 0 ? Math.max(0, Math.min(1, value / max)) : 0)
   readonly property bool arcVisible: fraction > 0.004
 
   // 0° is 3 o'clock, increasing clockwise
@@ -95,8 +109,8 @@ Item {
     Text {
       textFormat: Text.PlainText
       anchors.horizontalCenter: parent.horizontalCenter
-      text: root.label.toUpperCase()
-      font.family: Style.font.family
+      text: root.displayTitle.toUpperCase()
+      font.family: root.fontFamily
       font.pixelSize: Style.font.caption
       font.bold: true
       font.letterSpacing: 1.1
@@ -106,8 +120,8 @@ Item {
     Text {
       textFormat: Text.PlainText
       anchors.horizontalCenter: parent.horizontalCenter
-      text: root.valueText !== "" ? root.valueText : (root.value >= 0 ? Math.round(root.value) + "%" : "–")
-      font.family: Style.font.family
+      text: root.valueText !== "" ? root.valueText : (root.fraction >= 0 ? Math.round(root.fraction * 100) + "%" : "–")
+      font.family: root.fontFamily
       font.pixelSize: Style.font.title
       font.bold: true
       color: root.valueColor
@@ -119,7 +133,7 @@ Item {
       textFormat: Text.PlainText
       anchors.horizontalCenter: parent.horizontalCenter
       text: root.subText
-      font.family: Style.font.family
+      font.family: root.fontFamily
       font.pixelSize: Style.font.caption
       font.bold: true
       color: root.subTextColor

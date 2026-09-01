@@ -1,11 +1,12 @@
 {
+  "$schema": "https://raw.githubusercontent.com/omarchy/omarchy/main/schemas/plugin.json",
   "schemaVersion": 1,
   "id": "io.github.edgarsilva.hw-monitor",
   "name": "Hardware Monitor",
   "version": "1.1.0",
   "author": "Edgar Silva",
   "license": "MIT",
-  "description": "RAM, CPU, and GPU in the bar as sleek icon + figure readouts and temperatures, with a first-class visual system panel.",
+  "description": "GPU, CPU, temperature, and RAM in the bar as sleek icon + figure readouts, with a first-class visual system panel.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,18 +15,19 @@
   },
   "barWidget": {
     "displayName": "Hardware Monitor",
-    "description": "Memory, CPU, and GPU load as sleek icon readouts with temperatures, vertical gauges, or spelled out words. Left click opens the system telemetry panel.",
+    "description": "GPU, CPU, temperature, and RAM load as sleek icon readouts, vertical gauges, or spelled out words. Left click opens the system telemetry panel.",
     "category": "System",
     "allowMultiple": true,
     "defaultSection": "right",
     "defaults": {
       "mode": "icons",
+      "itemsOrder": ["gpu", "cpu", "cpu-temp", "ram"],
       "refreshIntervalSec": 2,
-      "showRam": true,
+      "showGpu": true,
       "showCpu": true,
       "showCpuTemp": true,
-      "showGpu": true,
-      "tempIcon": "",
+      "showGpuTemp": false,
+      "showRam": true,
       "showGauges": false,
       "showValues": false,
       "showClocks": false,
@@ -38,6 +40,12 @@
       "criticalPercent": 90,
       "warnTempC": 75,
       "criticalTempC": 90,
+      "gpuIcon": "󰾲",
+      "cpuIcon": "",
+      "tempIcon": "",
+      "gpuTempIcon": "󰔏",
+      "ramIcon": "",
+      "clockIcon": "󰓅",
       "clickCommand": "",
       "percentPad": "none",
       "monitors": []
@@ -54,14 +62,118 @@
           "labels"
         ],
         "defaultValue": "icons",
-        "description": "icons is sleek icon + figures + temperature; compact is glyph + gauge; full adds the temperature; labels spells the readout out as words — RAM 11/23G · CPU 34% 46° — with no glyph or gauge. Right-clicking the widget cycles them."
+        "description": "icons is sleek icon + figures + temperature; compact is glyph + gauge; full adds the temperature; labels spells the readout out as words. Right-clicking the widget cycles them."
       },
       {
-        "key": "monitors",
+        "key": "itemsOrder",
         "type": "string",
-        "label": "Monitors",
-        "defaultValue": "",
-        "description": "Which screens to draw on, by connector name — 'DP-1', or 'DP-1,HDMI-A-1'. Empty means all of them. The bar mounts one widget per monitor and has no per-monitor filter of its own, so an instance hides itself on the screens it was not asked for, and stops sampling there too."
+        "label": "Item sequence",
+        "defaultValue": "gpu,cpu,cpu-temp,ram",
+        "description": "Order of telemetry items in the bar, comma-separated: 'gpu,cpu,cpu-temp,ram' or 'gpu,cpu,cpu-temp,gpu-temp,ram'."
+      },
+      {
+        "key": "showGpu",
+        "type": "boolean",
+        "label": "Show GPU load",
+        "defaultValue": true,
+        "description": "Show GPU load in the top bar (hidden automatically if no GPU card is found)."
+      },
+      {
+        "key": "showCpu",
+        "type": "boolean",
+        "label": "Show CPU load",
+        "defaultValue": true,
+        "description": "Show CPU load percentage in the top bar."
+      },
+      {
+        "key": "showCpuTemp",
+        "type": "boolean",
+        "label": "Show CPU temperature",
+        "defaultValue": true,
+        "description": "Show CPU temperature with thermometer icon."
+      },
+      {
+        "key": "showGpuTemp",
+        "type": "boolean",
+        "label": "Show GPU temperature",
+        "defaultValue": false,
+        "description": "Show GPU temperature in the top bar."
+      },
+      {
+        "key": "showRam",
+        "type": "boolean",
+        "label": "Show memory",
+        "defaultValue": true,
+        "description": "Show RAM / memory usage."
+      },
+      {
+        "key": "ramFormat",
+        "type": "enum",
+        "label": "Memory format",
+        "options": [
+          "used/total",
+          "used",
+          "percent",
+          "free",
+          "available"
+        ],
+        "defaultValue": "used/total",
+        "description": "'used/total' (12/23G), 'used' (12.3G), 'percent' (52%), 'free' (11.1G), or 'available' (11.1G)."
+      },
+      {
+        "key": "tempFormat",
+        "type": "enum",
+        "label": "Temperature format",
+        "options": [
+          "degree-unit",
+          "degree",
+          "unit",
+          "unit-lower",
+          "bare"
+        ],
+        "defaultValue": "degree-unit",
+        "description": "'degree-unit' (45°C/113°F), 'degree' (45°), 'unit' (45C), 'unit-lower' (45c), or 'bare' (45)."
+      },
+      {
+        "key": "fahrenheit",
+        "type": "boolean",
+        "label": "Use Fahrenheit (°F)",
+        "defaultValue": false,
+        "description": "Display temperatures in Fahrenheit (°F) instead of Celsius (°C)."
+      },
+      {
+        "key": "percentPad",
+        "type": "enum",
+        "label": "Percentage padding",
+        "options": [
+          "none",
+          "zero",
+          "lead",
+          "trail"
+        ],
+        "defaultValue": "none",
+        "description": "How percentages hold width: 'none' (natural flow), 'zero' (03%), 'lead' ( 3%), or 'trail'."
+      },
+      {
+        "key": "showGauges",
+        "type": "boolean",
+        "label": "Show vertical gauges",
+        "defaultValue": false,
+        "description": "Show vertical battery-style capsule gauges in the bar."
+      },
+      {
+        "key": "showValues",
+        "type": "boolean",
+        "label": "Show figures with gauges",
+        "defaultValue": false,
+        "description": "Put numeric figures beside vertical gauges in compact and full modes."
+      },
+      {
+        "key": "showClocks",
+        "type": "boolean",
+        "label": "Show clock speeds",
+        "defaultValue": false,
+        "description": "CPU average clock across all threads, and GPU core clock, in GHz."
       },
       {
         "key": "refreshIntervalSec",
@@ -73,95 +185,40 @@
         "defaultValue": 2
       },
       {
-        "key": "showValues",
-        "type": "boolean",
-        "label": "Show percentages",
-        "defaultValue": false,
-        "description": "Put the numbers back on the row beside each gauge in compact/full modes. (icons and labels always show them)."
+        "key": "gpuIcon",
+        "type": "string",
+        "label": "GPU glyph",
+        "defaultValue": "󰾲"
       },
       {
-        "key": "ramFormat",
-        "type": "enum",
-        "label": "Memory readout",
-        "options": [
-          "used/total",
-          "used",
-          "percent"
-        ],
-        "defaultValue": "used/total",
-        "description": "Only applies when Show percentages is on."
-      },
-      {
-        "key": "tempFormat",
-        "type": "enum",
-        "label": "Temperature marker",
-        "options": [
-          "degree",
-          "unit",
-          "unit-lower",
-          "degree-unit",
-          "bare"
-        ],
-        "defaultValue": "degree-unit",
-        "description": "45°, 45C, 45c, 45°C, or 45. In a monospace face the degree sign owns a whole character cell but inks only a small ring at the top of it, so it reads as a gap before whatever follows — a letter fills the cell and evens out the spacing."
-      },
-      {
-        "key": "percentPad",
-        "type": "enum",
-        "label": "Percentage width",
-        "options": [
-          "lead",
-          "zero",
-          "trail",
-          "none"
-        ],
-        "defaultValue": "none",
-        "description": "How a percentage holds its width so the group does not resize as the figure gains a digit. lead pads with a space (' 3%'), zero pads with a zero ('03%'), trail reserves the leftover after the group, none lets it size naturally without padding zero. A pad character is a full cell in a monospace face, so lead puts a gap between a label and its figure where zero puts ink."
-      },
-      {
-        "key": "showRam",
-        "type": "boolean",
-        "label": "Show memory",
-        "defaultValue": true
-      },
-      {
-        "key": "showCpu",
-        "type": "boolean",
-        "label": "Show CPU",
-        "defaultValue": true
-      },
-      {
-        "key": "showCpuTemp",
-        "type": "boolean",
-        "label": "Show CPU temperature",
-        "defaultValue": true
+        "key": "cpuIcon",
+        "type": "string",
+        "label": "CPU glyph",
+        "defaultValue": ""
       },
       {
         "key": "tempIcon",
         "type": "string",
         "label": "Temperature glyph",
-        "defaultValue": "",
-        "description": "Marks the temperature figure (e.g. 󰁹 for battery/capsule,  for thermometer)."
+        "defaultValue": ""
       },
       {
-        "key": "showGpu",
-        "type": "boolean",
-        "label": "Show GPU",
-        "defaultValue": true
+        "key": "gpuTempIcon",
+        "type": "string",
+        "label": "GPU Temperature glyph",
+        "defaultValue": "󰔏"
       },
       {
-        "key": "showClocks",
-        "type": "boolean",
-        "label": "Show clock speeds",
-        "defaultValue": false,
-        "description": "CPU average clock across all threads, and GPU core clock, in GHz."
+        "key": "ramIcon",
+        "type": "string",
+        "label": "Memory glyph",
+        "defaultValue": ""
       },
       {
         "key": "clockIcon",
         "type": "string",
         "label": "Clock glyph",
-        "defaultValue": "󰓅",
-        "description": "Marks the clock figure. The speedometer needs ~16px to stay distinct; on a smaller bar 󱑻 (square wave) or 󰥛 (sine wave) hold up better. Empty draws the number alone."
+        "defaultValue": "󰓅"
       },
       {
         "key": "iconSize",
@@ -171,73 +228,65 @@
         "max": 48,
         "step": 1,
         "defaultValue": 0,
-        "description": "0 follows the theme's bar icon size. Setting it scales this widget's glyphs, gauges, and numbers together — but only this widget, so it will no longer match the bar's other icons. To scale the whole bar, set [font] base-size in ~/.config/omarchy/shell.toml instead."
-      },
-      {
-        "key": "showGauges",
-        "type": "boolean",
-        "label": "Show gauges",
-        "defaultValue": false,
-        "description": "Show vertical gauges in the bar readout."
-      },
-      {
-        "key": "gpu",
-        "type": "string",
-        "label": "GPU",
-        "defaultValue": "auto",
-        "description": "auto picks the card that reports load. Otherwise an index (0, 1) or a substring of the card, driver, or model name."
-      },
-      {
-        "key": "fahrenheit",
-        "type": "boolean",
-        "label": "Fahrenheit",
-        "defaultValue": false
+        "description": "0 follows the theme's bar icon size."
       },
       {
         "key": "warnPercent",
         "type": "integer",
-        "label": "Load warning threshold (%)",
+        "label": "Warning load (%)",
         "min": 1,
         "max": 100,
-        "step": 5,
-        "defaultValue": 70,
-        "description": "Where a readout starts warming toward the theme's urgent color."
+        "step": 1,
+        "defaultValue": 70
       },
       {
         "key": "criticalPercent",
         "type": "integer",
-        "label": "Load critical threshold (%)",
+        "label": "Critical load (%)",
         "min": 1,
         "max": 100,
-        "step": 5,
+        "step": 1,
         "defaultValue": 90
       },
       {
         "key": "warnTempC",
         "type": "integer",
-        "label": "Temperature warning threshold (°C)",
+        "label": "Warning temp (°C)",
         "min": 1,
         "max": 150,
-        "step": 5,
+        "step": 1,
         "defaultValue": 75
       },
       {
         "key": "criticalTempC",
         "type": "integer",
-        "label": "Temperature critical threshold (°C)",
+        "label": "Critical temp (°C)",
         "min": 1,
         "max": 150,
-        "step": 5,
+        "step": 1,
         "defaultValue": 90
+      },
+      {
+        "key": "gpu",
+        "type": "string",
+        "label": "GPU card preference",
+        "defaultValue": "auto",
+        "description": "'auto' picks the active card; otherwise an index ('0', '1') or name substring."
+      },
+      {
+        "key": "monitors",
+        "type": "string",
+        "label": "Monitors",
+        "defaultValue": "",
+        "description": "Which screens to draw on by connector name (e.g. 'DP-1,HDMI-A-1'). Empty means all screens."
       },
       {
         "key": "clickCommand",
         "type": "string",
         "label": "Left click runs",
         "defaultValue": "",
-        "description": "Command to run on left click (e.g. 'omarchy-launch-or-focus-tui btop'). Empty opens the built-in system telemetry panel."
+        "description": "Custom command to run on left click. Leave empty to open the built-in system telemetry panel."
       }
     ]
-  },
-  "repository": "https://github.com/edgarsilva/omarchy-hw-monitor"
+  }
 }
