@@ -29,7 +29,7 @@
       "showClocks": false,
       "iconSize": 0,
       "ramFormat": "used/total",
-      "tempFormat": "degree",
+      "tempFormat": "degree-unit",
       "gpu": "auto",
       "fahrenheit": false,
       "warnPercent": 70,
@@ -100,7 +100,7 @@
           "degree-unit",
           "bare"
         ],
-        "defaultValue": "degree",
+        "defaultValue": "degree-unit",
         "description": "45°, 45C, 45c, 45°C, or 45. In a monospace face the degree sign owns a whole character cell but inks only a small ring at the top of it, so it reads as a gap before whatever follows — a letter fills the cell and evens out the spacing."
       },
       {

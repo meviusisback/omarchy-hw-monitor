@@ -30,7 +30,7 @@ Panel {
   //   icons    icon + figures + temperature (Noctalia-style sleek readout, default)
   //   compact  glyph + gauge
   //   full     glyph + gauge + temperature
-  //   labels   Waybar-style text readout — RAM 11/23G · CPU 34% 46° — with words spelled out
+  //   labels   Waybar-style text readout — RAM 11/23G · CPU 34% · 46°C — with words spelled out
   readonly property var modes: ["icons", "compact", "full", "labels"]
   readonly property string mode: {
     var want = String(setting("mode", "icons")).trim().toLowerCase()
@@ -81,8 +81,7 @@ Panel {
   // One knob for the whole group's scale. 0 follows the theme's bar icon size.
   readonly property int iconSizeSetting: intSetting("iconSize", 0, 0, 48)
   readonly property int iconSize: iconSizeSetting > 0 ? iconSizeSetting : Style.bar.iconFont
-  readonly property int valueSize: Math.max(9, Math.round(iconSize * 0.95))
-  readonly property int labelSize: Math.max(8, Math.round(iconSize * 0.85))
+  readonly property int valueSize: Math.max(9, Math.round(iconSize * 0.92))
 
   readonly property int warnPercent: intSetting("warnPercent", 70, 1, 100)
   readonly property int criticalPercent: intSetting("criticalPercent", 90, 1, 100)
@@ -171,8 +170,8 @@ Panel {
   }
 
   readonly property string tempFormat: {
-    var want = String(setting("tempFormat", "degree")).trim().toLowerCase()
-    return ["degree", "unit", "unit-lower", "degree-unit", "bare"].indexOf(want) === -1 ? "degree" : want
+    var want = String(setting("tempFormat", "degree-unit")).trim().toLowerCase()
+    return ["degree-unit", "degree", "unit", "unit-lower", "bare"].indexOf(want) === -1 ? "degree-unit" : want
   }
 
   function percentPadFor(value) {
@@ -192,10 +191,10 @@ Panel {
 
     var unit = fahrenheit ? "F" : "C"
     var text = figure
-    if (tempFormat === "degree") text += "°"
+    if (tempFormat === "degree-unit") text += "°" + unit
+    else if (tempFormat === "degree") text += "°"
     else if (tempFormat === "unit") text += unit
     else if (tempFormat === "unit-lower") text += unit.toLowerCase()
-    else if (tempFormat === "degree-unit") text += "°" + unit
     return (labelled || percentPad === "lead") ? Model.padLeft(text, 3) : text
   }
 
@@ -442,7 +441,7 @@ Panel {
       id: horizontalCells
       visible: !root.vertical
       anchors.centerIn: parent
-      spacing: Style.space(root.mode === "icons" ? 12 : 8)
+      spacing: Style.space(root.mode === "icons" ? 14 : 8)
 
       Repeater {
         model: root.cells
@@ -484,7 +483,8 @@ Panel {
     Row {
       id: group
       required property var modelData
-      spacing: Style.space(root.mode === "icons" ? 4 : (root.labelled ? 3 : 4))
+      spacing: Style.space(4)
+      anchors.verticalCenter: parent.verticalCenter
 
       readonly property real slack: root.showValues && modelData.slotted
         ? Math.max(0, root.percentSlot - valueText.implicitWidth - spacing)
@@ -548,7 +548,7 @@ Panel {
         text: modelData.label
         color: root.dim
         font.family: root.fontFamily
-        font.pixelSize: root.labelSize
+        font.pixelSize: root.valueSize
         font.bold: true
         verticalAlignment: Text.AlignVCenter
         renderType: Text.NativeRendering
@@ -597,7 +597,7 @@ Panel {
           text: root.clockIcon
           color: root.warm(root.dim, modelData.severity)
           font.family: root.fontFamily
-          font.pixelSize: root.labelSize + 1
+          font.pixelSize: root.valueSize
           verticalAlignment: Text.AlignVCenter
           renderType: Text.NativeRendering
           Behavior on color { ColorAnimation { duration: 240 } }
@@ -608,32 +608,38 @@ Panel {
           text: modelData.clock
           color: root.warm(root.dim, modelData.severity)
           font.family: root.fontFamily
-          font.pixelSize: root.labelSize
+          font.pixelSize: root.valueSize
           verticalAlignment: Text.AlignVCenter
           renderType: Text.NativeRendering
           Behavior on color { ColorAnimation { duration: 240 } }
         }
       }
 
-      TextMetrics {
-        id: tempMetrics
-        font.family: root.fontFamily
-        font.pixelSize: root.labelSize
-        text: modelData.temp
-      }
-
-      Item {
+      Row {
         visible: root.showTemps && modelData.temp !== ""
-        width: visible ? Math.max(1, Math.ceil(tempMetrics.tightBoundingRect.width)) : 0
         height: root.contentHeight
+        spacing: Style.space(3)
 
         Text {
-          x: -tempMetrics.tightBoundingRect.x
-          anchors.verticalCenter: parent.verticalCenter
+          textFormat: Text.PlainText
+          height: root.contentHeight
+          text: "·"
+          color: Qt.darker(root.base, 1.8)
+          font.family: root.fontFamily
+          font.pixelSize: root.valueSize
+          verticalAlignment: Text.AlignVCenter
+          renderType: Text.NativeRendering
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          height: root.contentHeight
           text: modelData.temp
           color: root.tempColor(modelData.tempC)
           font.family: root.fontFamily
-          font.pixelSize: root.labelSize
+          font.pixelSize: root.valueSize
+          font.bold: false
+          verticalAlignment: Text.AlignVCenter
           renderType: Text.NativeRendering
           Behavior on color { ColorAnimation { duration: 240 } }
         }
