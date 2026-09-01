@@ -43,7 +43,7 @@ Clicking the widget opens an Omarchy keyboard-driven popup panel anchored to the
 
 ### The four bar readouts
 
-**`icons`** *(default)* — sleek component icon, live figures, and temperature with dynamic temperature coloring (e.g. ` 11/23G    34% 46°   󰾲 15% 52°`), ~140px.
+**`icons`** *(default)* — GPU load, CPU load, CPU temperature with battery/capsule icon, and RAM (e.g. `󰾲 0%    34%   󰁹 46°C    11/23G`), ~150px.
 
 **`compact`** — a glyph and a gauge per component, ~80px. The gauge fills from
 the bottom and warms toward the theme's urgent colour as load climbs, so the
@@ -132,16 +132,18 @@ omarchy bar set io.github.edgarsilva.hw-monitor fahrenheit true --json
 |---|---|---|---|
 | `mode` | string | `"icons"` | `"icons"`, `"compact"`, `"full"`, or `"labels"`. Right-clicking cycles them. |
 | `refreshIntervalSec` | int | `2` | Seconds between samples. `1` is as fast as `FileView` makes sense; `5` is plenty for a background bar. |
-| `showRam` | bool | `true` | Show memory. |
-| `showCpu` | bool | `true` | Show CPU. |
 | `showGpu` | bool | `true` | Show GPU (hidden automatically if no card was found). |
+| `showCpu` | bool | `true` | Show CPU. |
+| `showCpuTemp` | bool | `true` | Show CPU temperature. |
+| `tempIcon` | string | `"󰁹"` | Glyph marking temperature figure (e.g. `"󰁹"` or `""`). |
+| `showRam` | bool | `true` | Show memory. |
 | `showValues` | bool | `false` | Put percentages back on the row beside each gauge in `compact`/`full` modes. (`icons` and `labels` always show them). |
 | `showGauges` | bool | `false` | Show vertical capsule gauges. |
 | `showClocks` | bool | `false` | Show CPU and GPU clock speeds in GHz. |
 | `clockIcon` | string | `"󰓅"` | Glyph marking the clock figure. Empty draws the number alone. |
 | `iconSize` | int | `0` | Overall scale in pixels. `0` follows the bar's icon font. |
 | `ramFormat` | string | `"used/total"` | `"used/total"` (`11/23G`), `"used"` (`11.2G`), or `"percent"` (`49%`). |
-| `tempFormat` | string | `"degree"` | `"degree"` (`45°`), `"unit"` (`45C`), `"unit-lower"` (`45c`), `"degree-unit"` (`45°C`), or `"bare"` (`45`). |
+| `tempFormat` | string | `"degree-unit"` | `"degree-unit"` (`45°C`), `"degree"` (`45°`), `"unit"` (`45C`), `"unit-lower"` (`45c`), or `"bare"` (`45`). |
 | `percentPad` | string | `"none"` | `"none"`, `"zero"`, `"lead"`, or `"trail"`. |
 | `gpu` | string | `"auto"` | `"auto"` picks the card reporting load; otherwise an index (`0`, `1`) or name substring. |
 | `fahrenheit` | bool | `false` | Temperatures in °F instead of °C. |

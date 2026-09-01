@@ -5,7 +5,7 @@ import qs.Commons
 import qs.Ui
 import "Model.js" as Model
 
-// RAM, CPU, and GPU as a row of sleek telemetry readouts: component glyphs,
+// GPU, CPU, Temperature, and RAM as a row of sleek telemetry readouts: component glyphs,
 // clean live numbers, and temperatures in the bar, with a first-class visual popup panel.
 //
 // Left click opens the Omarchy system panel popup (or runs clickCommand if set).
@@ -27,30 +27,23 @@ Panel {
   }
 
   // Four states, cycled by right click:
-  //   icons    icon + figures + temperature (Noctalia-style sleek readout, default)
-  //   compact  glyph + gauge
-  //   full     glyph + gauge + temperature
-  //   labels   Waybar-style text readout — RAM 11/23G · CPU 34% · 46°C — with words spelled out
+  //   icons    GPU load + CPU load + CPU temperature + RAM (Noctalia-style sleek readout, default)
+  //   compact  glyphs + gauges
+  //   full     glyphs + gauges + temperature
+  //   labels   Waybar-style text readout — GPU 0% · CPU 34% · TEMP 46°C · RAM 11/23G
   readonly property var modes: ["icons", "compact", "full", "labels"]
   readonly property string mode: {
     var want = String(setting("mode", "icons")).trim().toLowerCase()
     return modes.indexOf(want) === -1 ? "icons" : want
   }
 
-  // A vertical bar is 28px wide — a glyph and a gauge and nothing else — so it
-  // drops the text whatever the mode says.
   readonly property string nextMode: modes[(modes.indexOf(mode) + 1) % modes.length]
   readonly property bool labelled: mode === "labels" && !vertical
   readonly property bool showTemps: mode !== "compact" && !vertical
   readonly property bool showValues: (labelled || mode === "icons" || boolSetting("showValues", false)) && !vertical
   readonly property bool showGauges: boolSetting("showGauges", mode !== "icons" && mode !== "labels")
-  // Clock speed: the CPU's average across every thread, and the GPU's core clock.
   readonly property bool showClocks: boolSetting("showClocks", false) && !vertical
 
-  // Which screens this instance draws on; empty means all of them. The bar
-  // mounts one widget per monitor and has no per-monitor filter of its own, so
-  // a widget that only belongs on one screen has to opt out on the others.
-  // Accepts an array or a comma/space separated string.
   readonly property var monitors: {
     var raw = setting("monitors", [])
     if (raw === undefined || raw === null) return []
@@ -64,21 +57,19 @@ Panel {
     return window && window.screen ? String(window.screen.name) : ""
   }
 
-  // An unknown screen name (no window yet) shows rather than hides, so the
-  // widget never vanishes because it was asked too early.
   readonly property bool onThisScreen: monitors.length === 0 || screenName === ""
     || monitors.indexOf(screenName) !== -1
 
-  readonly property bool showRam: boolSetting("showRam", true)
-  readonly property bool showCpu: boolSetting("showCpu", true)
   readonly property bool showGpu: boolSetting("showGpu", true)
+  readonly property bool showCpu: boolSetting("showCpu", true)
+  readonly property bool showCpuTemp: boolSetting("showCpuTemp", true)
+  readonly property bool showRam: boolSetting("showRam", true)
   readonly property bool fahrenheit: boolSetting("fahrenheit", false)
   readonly property string ramFormat: {
     var want = String(setting("ramFormat", "used/total")).trim().toLowerCase()
     return ["used/total", "used", "percent"].indexOf(want) === -1 ? "used/total" : want
   }
 
-  // One knob for the whole group's scale. 0 follows the theme's bar icon size.
   readonly property int iconSizeSetting: intSetting("iconSize", 0, 0, 48)
   readonly property int iconSize: iconSizeSetting > 0 ? iconSizeSetting : Style.bar.iconFont
   readonly property int valueSize: Math.max(9, Math.round(iconSize * 0.92))
@@ -90,10 +81,11 @@ Panel {
 
   readonly property string clickCommand: String(setting("clickCommand", ""))
 
-  readonly property string clockIcon: String(setting("clockIcon", "󰓅"))
-  readonly property string ramIcon: String(setting("ramIcon", ""))
-  readonly property string cpuIcon: String(setting("cpuIcon", ""))
   readonly property string gpuIcon: String(setting("gpuIcon", "󰾲"))
+  readonly property string cpuIcon: String(setting("cpuIcon", ""))
+  readonly property string tempIcon: String(setting("tempIcon", "󰁹"))
+  readonly property string ramIcon: String(setting("ramIcon", ""))
+  readonly property string clockIcon: String(setting("clockIcon", "󰓅"))
 
   function boolSetting(name, fallback) {
     var value = setting(name, fallback)
@@ -104,9 +96,10 @@ Panel {
     return fallback
   }
 
-  readonly property int ramIconRotation: intSetting("ramIconRotation", 0, -360, 360)
-  readonly property int cpuIconRotation: intSetting("cpuIconRotation", 0, -360, 360)
   readonly property int gpuIconRotation: intSetting("gpuIconRotation", 0, -360, 360)
+  readonly property int cpuIconRotation: intSetting("cpuIconRotation", 0, -360, 360)
+  readonly property int tempIconRotation: intSetting("tempIconRotation", 0, -360, 360)
+  readonly property int ramIconRotation: intSetting("ramIconRotation", 0, -360, 360)
 
   function intSetting(name, fallback, min, max) {
     var n = parseInt(String(setting(name, fallback)), 10)
@@ -130,7 +123,6 @@ Panel {
                    from.a)
   }
 
-  // Specific temperature color: cool below 50°C, warming up 50-75°C, hot red >= 75°C
   function tempColor(tempC) {
     if (!isFinite(tempC) || tempC <= 0) return dim
     if (tempC < 50) return dim
@@ -222,9 +214,67 @@ Panel {
     return Model.padLeft(used, 3) + "/" + total
   }
 
+  // Desired Order: GPU Load -> CPU Load -> CPU Temperature -> RAM
   readonly property var cells: {
     var out = []
 
+    // 1. GPU Load (no GPU temp)
+    if (showGpu && hw.hasGpu) {
+      var busy = hw.gpuPercent
+      var meterValue = busy >= 0 ? busy : hw.gpuVramPercent
+      out.push({
+        key: "gpu",
+        label: "GPU",
+        icon: gpuIcon,
+        iconRotation: gpuIconRotation,
+        value: percentText(meterValue),
+        pad: percentPadFor(meterValue),
+        slotted: percentPad === "trail",
+        temp: "",
+        tempC: -1,
+        clock: Model.formatGhzShort(hw.gpuMhz),
+        ratio: meterValue >= 0 ? meterValue / 100 : 0,
+        severity: Model.severity(busy, warnPercent, criticalPercent)
+      })
+    }
+
+    // 2. CPU Load
+    if (showCpu) {
+      out.push({
+        key: "cpu",
+        label: "CPU",
+        icon: cpuIcon,
+        iconRotation: cpuIconRotation,
+        value: percentText(hw.cpuPercent),
+        pad: percentPadFor(hw.cpuPercent),
+        slotted: percentPad === "trail",
+        temp: "",
+        tempC: -1,
+        clock: Model.formatGhzShort(hw.cpuMhz),
+        ratio: hw.cpuPercent >= 0 ? hw.cpuPercent / 100 : 0,
+        severity: Model.severity(hw.cpuPercent, warnPercent, criticalPercent)
+      })
+    }
+
+    // 3. CPU Temperature with battery icon + number
+    if (showCpuTemp && hw.cpuTempC > 0 && showTemps) {
+      out.push({
+        key: "cpu-temp",
+        label: "TEMP",
+        icon: tempIcon,
+        iconRotation: tempIconRotation,
+        value: tempText(hw.cpuTempC),
+        pad: "",
+        slotted: false,
+        temp: "",
+        tempC: hw.cpuTempC,
+        clock: "",
+        ratio: Math.min(1, Math.max(0, (hw.cpuTempC - 30) / Math.max(1, criticalTempC - 30))),
+        severity: Model.severity(hw.cpuTempC, warnTempC, criticalTempC)
+      })
+    }
+
+    // 4. RAM
     if (showRam) {
       out.push({
         key: "ram",
@@ -239,42 +289,6 @@ Panel {
         clock: "",
         ratio: hw.memPercent >= 0 ? hw.memPercent / 100 : 0,
         severity: Model.severity(hw.memPercent, warnPercent, criticalPercent)
-      })
-    }
-
-    if (showCpu) {
-      out.push({
-        key: "cpu",
-        label: "CPU",
-        icon: cpuIcon,
-        iconRotation: cpuIconRotation,
-        value: percentText(hw.cpuPercent),
-        pad: percentPadFor(hw.cpuPercent),
-        slotted: percentPad === "trail",
-        temp: tempText(hw.cpuTempC),
-        tempC: hw.cpuTempC,
-        clock: Model.formatGhzShort(hw.cpuMhz),
-        ratio: hw.cpuPercent >= 0 ? hw.cpuPercent / 100 : 0,
-        severity: Model.severity(hw.cpuPercent, warnPercent, criticalPercent)
-      })
-    }
-
-    if (showGpu && hw.hasGpu) {
-      var busy = hw.gpuPercent
-      var meterValue = busy >= 0 ? busy : hw.gpuVramPercent
-      out.push({
-        key: "gpu",
-        label: "GPU",
-        icon: gpuIcon,
-        iconRotation: gpuIconRotation,
-        value: percentText(meterValue),
-        pad: percentPadFor(meterValue),
-        slotted: percentPad === "trail",
-        temp: tempText(hw.gpuTempC),
-        tempC: hw.gpuTempC,
-        clock: Model.formatGhzShort(hw.gpuMhz),
-        ratio: meterValue >= 0 ? meterValue / 100 : 0,
-        severity: Model.severity(busy, warnPercent, criticalPercent)
       })
     }
 
@@ -307,22 +321,9 @@ Panel {
       lines.push("Load " + hw.load.one.toFixed(2) + "  " + hw.load.five.toFixed(2) + "  " + hw.load.fifteen.toFixed(2))
     }
 
-    if (hw.memory) {
-      lines.push("")
-      lines.push("RAM  " + Model.formatGib(Model.gibFromKib(hw.memory.usedKib)) + " / "
-                 + Model.formatGib(Model.gibFromKib(hw.memory.totalKib)) + " GiB  ·  "
-                 + Model.formatPercent(hw.memory.percent))
-      lines.push("Cache " + Model.formatGib(Model.gibFromKib(hw.memory.cachedKib)) + " GiB"
-                 + (hw.memory.swapTotalKib > 0
-                    ? "  ·  Swap " + Model.formatGib(Model.gibFromKib(hw.memory.swapUsedKib)) + " / "
-                      + Model.formatGib(Model.gibFromKib(hw.memory.swapTotalKib)) + " GiB"
-                    : ""))
-    }
-
     if (hw.hasGpu) {
       lines.push("")
       var gpu = "GPU  " + Model.formatPercent(hw.gpuPercent)
-      if (hw.gpuTempC > 0) gpu += "  ·  " + Model.formatTemp(hw.gpuTempC, fahrenheit) + (fahrenheit ? "F" : "C")
       if (hw.gpuWatts >= 0) gpu += "  ·  " + Model.formatWatts(hw.gpuWatts)
       lines.push(gpu)
       lines.push(String(hw.gpuInfo.name))
@@ -335,6 +336,18 @@ Panel {
       if (hw.gpuRpm >= 0) extras.push("Fan " + Model.formatRpm(hw.gpuRpm))
       if (hw.gpuMhz > 0) extras.push(Model.formatGhz(hw.gpuMhz))
       if (extras.length > 0) lines.push(extras.join("  ·  "))
+    }
+
+    if (hw.memory) {
+      lines.push("")
+      lines.push("RAM  " + Model.formatGib(Model.gibFromKib(hw.memory.usedKib)) + " / "
+                 + Model.formatGib(Model.gibFromKib(hw.memory.totalKib)) + " GiB  ·  "
+                 + Model.formatPercent(hw.memory.percent))
+      lines.push("Cache " + Model.formatGib(Model.gibFromKib(hw.memory.cachedKib)) + " GiB"
+                 + (hw.memory.swapTotalKib > 0
+                    ? "  ·  Swap " + Model.formatGib(Model.gibFromKib(hw.memory.swapUsedKib)) + " / "
+                      + Model.formatGib(Model.gibFromKib(hw.memory.swapTotalKib)) + " GiB"
+                    : ""))
     }
 
     return lines.join("\n")
@@ -484,7 +497,6 @@ Panel {
       id: group
       required property var modelData
       spacing: Style.space(4)
-      anchors.verticalCenter: parent.verticalCenter
 
       readonly property real slack: root.showValues && modelData.slotted
         ? Math.max(0, root.percentSlot - valueText.implicitWidth - spacing)
@@ -513,7 +525,9 @@ Panel {
           text: modelData.icon
           fontFamily: root.fontFamily
           fontSize: root.iconSize
-          color: root.warm(Color.accent, modelData.severity)
+          color: modelData.key === "cpu-temp"
+            ? root.tempColor(modelData.tempC)
+            : root.warm(Color.accent, modelData.severity)
           Behavior on color { ColorAnimation { duration: 240 } }
         }
 
@@ -522,7 +536,9 @@ Panel {
           visible: modelData.iconRotation !== 0
           rotation: modelData.iconRotation
           text: modelData.icon
-          color: root.warm(Color.accent, modelData.severity)
+          color: modelData.key === "cpu-temp"
+            ? root.tempColor(modelData.tempC)
+            : root.warm(Color.accent, modelData.severity)
           font.family: root.fontFamily
           font.pixelSize: root.iconSize
           renderType: Text.NativeRendering
@@ -536,7 +552,7 @@ Panel {
         bodyWidth: root.gaugeWidth
         bodyHeight: root.gaugeHeight
         ratio: modelData.ratio
-        fillColor: root.warm(root.base, modelData.severity)
+        fillColor: modelData.key === "cpu-temp" ? root.tempColor(modelData.tempC) : root.warm(root.base, modelData.severity)
         trackColor: Qt.rgba(root.base.r, root.base.g, root.base.b, 0.14)
         borderColor: Qt.rgba(root.base.r, root.base.g, root.base.b, 0.4)
         glow: modelData.severity >= 1
@@ -575,7 +591,9 @@ Panel {
           id: valueText
           height: root.contentHeight
           text: modelData.value
-          color: root.warm(root.base, modelData.severity)
+          color: modelData.key === "cpu-temp"
+            ? root.tempColor(modelData.tempC)
+            : root.warm(root.base, modelData.severity)
           font.family: root.fontFamily
           font.pixelSize: root.valueSize
           font.bold: true

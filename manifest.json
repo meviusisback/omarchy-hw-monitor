@@ -23,7 +23,9 @@
       "refreshIntervalSec": 2,
       "showRam": true,
       "showCpu": true,
+      "showCpuTemp": true,
       "showGpu": true,
+      "tempIcon": "󰁹",
       "showGauges": false,
       "showValues": false,
       "showClocks": false,
@@ -127,6 +129,19 @@
         "type": "boolean",
         "label": "Show CPU",
         "defaultValue": true
+      },
+      {
+        "key": "showCpuTemp",
+        "type": "boolean",
+        "label": "Show CPU temperature",
+        "defaultValue": true
+      },
+      {
+        "key": "tempIcon",
+        "type": "string",
+        "label": "Temperature glyph",
+        "defaultValue": "󰁹",
+        "description": "Marks the temperature figure (e.g. 󰁹 for battery/capsule,  for thermometer)."
       },
       {
         "key": "showGpu",
