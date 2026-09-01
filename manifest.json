@@ -25,7 +25,7 @@
       "showCpu": true,
       "showCpuTemp": true,
       "showGpu": true,
-      "tempIcon": "󰁹",
+      "tempIcon": "",
       "showGauges": false,
       "showValues": false,
       "showClocks": false,
@@ -140,7 +140,7 @@
         "key": "tempIcon",
         "type": "string",
         "label": "Temperature glyph",
-        "defaultValue": "󰁹",
+        "defaultValue": "",
         "description": "Marks the temperature figure (e.g. 󰁹 for battery/capsule,  for thermometer)."
       },
       {

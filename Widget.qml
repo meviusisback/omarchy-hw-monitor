@@ -83,7 +83,7 @@ Panel {
 
   readonly property string gpuIcon: String(setting("gpuIcon", "󰾲"))
   readonly property string cpuIcon: String(setting("cpuIcon", ""))
-  readonly property string tempIcon: String(setting("tempIcon", "󰁹"))
+  readonly property string tempIcon: String(setting("tempIcon", ""))
   readonly property string ramIcon: String(setting("ramIcon", ""))
   readonly property string clockIcon: String(setting("clockIcon", "󰓅"))
 

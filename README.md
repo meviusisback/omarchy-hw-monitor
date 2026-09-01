@@ -43,7 +43,7 @@ Clicking the widget opens an Omarchy keyboard-driven popup panel anchored to the
 
 ### The four bar readouts
 
-**`icons`** *(default)* — GPU load, CPU load, CPU temperature with battery/capsule icon, and RAM (e.g. `󰾲 0%    34%   󰁹 46°C    11/23G`), ~150px.
+**`icons`** *(default)* — GPU load, CPU load, CPU temperature with thermometer icon, and RAM (e.g. `󰾲 0%    34%    46°C    11/23G`), ~150px.
 
 **`compact`** — a glyph and a gauge per component, ~80px. The gauge fills from
 the bottom and warms toward the theme's urgent colour as load climbs, so the
@@ -135,7 +135,7 @@ omarchy bar set io.github.edgarsilva.hw-monitor fahrenheit true --json
 | `showGpu` | bool | `true` | Show GPU (hidden automatically if no card was found). |
 | `showCpu` | bool | `true` | Show CPU. |
 | `showCpuTemp` | bool | `true` | Show CPU temperature. |
-| `tempIcon` | string | `"󰁹"` | Glyph marking temperature figure (e.g. `"󰁹"` or `""`). |
+| `tempIcon` | string | `""` | Glyph marking temperature figure (e.g. `""` or `"󰔏"`). |
 | `showRam` | bool | `true` | Show memory. |
 | `showValues` | bool | `false` | Put percentages back on the row beside each gauge in `compact`/`full` modes. (`icons` and `labels` always show them). |
 | `showGauges` | bool | `false` | Show vertical capsule gauges. |
