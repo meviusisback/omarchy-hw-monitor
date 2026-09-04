@@ -187,6 +187,29 @@ omarchy-shell meviusisback.hw-monitor refresh
 omarchy-shell meviusisback.hw-monitor status
 ```
 
+## Requirements
+
+- A Nerd Font for the glyphs, which Omarchy already ships
+- `pciutils` (`lspci`) — optional, only to name the GPU card in the panel
+- `nvidia-smi` — only for NVIDIA cards, installed with the driver
+
+No pip packages, no daemon, no elevated privileges. The plugin reads `/proc`
+and `/sys` and nothing else.
+
+## Removal
+
+```sh
+omarchy plugin remove meviusisback.hw-monitor
+```
+
+That drops it from the bar, deletes the plugin, and keeps no state — there is
+nothing else to clean up.
+
+## License
+
+MIT — see [LICENSE](LICENSE). Original work by Edgar Silva; continued and
+extended by meviusisback.
+
 ## Credits
 
 Based on [Edgar Silva's omarchy-hw-monitor](https://github.com/edgarsilva/omarchy-hw-monitor)
