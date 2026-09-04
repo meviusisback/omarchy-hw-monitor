@@ -2,7 +2,7 @@
 
 Memory, CPU, and GPU in the bar, with a first-class visual system panel popup. Four readouts, cycled with a right click: sleek icon groups (Noctalia-style), gauges alone, gauges with temperatures, or the numbers spelled out.
 
-![The icon readout in a bar](preview.png)
+![The system panel, anchored under the bar readout](preview.png)
 
 Everything is read straight from `/proc` and `/sys` inside the shell process —
 no polling script, no subprocess on a timer.
