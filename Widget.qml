@@ -12,8 +12,8 @@ import "Model.js" as Model
 // Right click walks the display modes and remembers the choice; middle click resamples.
 Panel {
   id: root
-  moduleName: "io.github.edgarsilva.hw-monitor"
-  ipcTarget: "io.github.edgarsilva.hw-monitor"
+  moduleName: "meviusisback.hw-monitor"
+  ipcTarget: "meviusisback.hw-monitor"
   manageIpc: false
 
   readonly property bool vertical: bar ? bar.vertical : false
@@ -466,7 +466,7 @@ Panel {
   }
 
   IpcHandler {
-    target: "io.github.edgarsilva.hw-monitor"
+    target: "meviusisback.hw-monitor"
 
     function open(): void { root.open() }
     function close(): void { root.close() }

@@ -10,13 +10,13 @@ no polling script, no subprocess on a timer.
 ## Install
 
 ```sh
-omarchy plugin add https://github.com/edgarsilva/omarchy-hw-monitor.git --enable
+omarchy plugin add https://github.com/meviusisback/omarchy-hw-monitor.git --enable
 ```
 
 Then place it where you want it and restart the shell:
 
 ```sh
-omarchy bar move io.github.edgarsilva.hw-monitor --section right --after omarchy.tray
+omarchy bar move meviusisback.hw-monitor --section right --after omarchy.tray
 omarchy restart shell
 ```
 
@@ -93,7 +93,7 @@ a blocking read never stalls the UI.
 Run the probe yourself to see what it found:
 
 ```sh
-~/.config/omarchy/plugins/io.github.edgarsilva.hw-monitor/hw-probe | jq
+~/.config/omarchy/plugins/meviusisback.hw-monitor/hw-probe | jq
 ```
 
 A sensor missing from that output is one this machine does not expose, and the
@@ -105,7 +105,7 @@ Settings are read from this widget's entry in `~/.config/omarchy/shell.json`:
 
 ```json
 {
-  "id": "io.github.edgarsilva.hw-monitor",
+  "id": "meviusisback.hw-monitor",
   "mode": "icons",
   "refreshIntervalSec": 2,
   "showRam": true,
@@ -124,8 +124,8 @@ Settings are read from this widget's entry in `~/.config/omarchy/shell.json`:
 Or set dynamically from the command line:
 
 ```sh
-omarchy bar set io.github.edgarsilva.hw-monitor mode full
-omarchy bar set io.github.edgarsilva.hw-monitor fahrenheit true --json
+omarchy bar set meviusisback.hw-monitor mode full
+omarchy bar set meviusisback.hw-monitor fahrenheit true --json
 ```
 
 | Key | Type | Default | Description |
@@ -166,23 +166,31 @@ Call methods through `omarchy-shell`:
 
 ```sh
 # Open the system telemetry popup
-omarchy-shell io.github.edgarsilva.hw-monitor open
+omarchy-shell meviusisback.hw-monitor open
 
 # Close the system panel
-omarchy-shell io.github.edgarsilva.hw-monitor close
+omarchy-shell meviusisback.hw-monitor close
 
 # Toggle the system panel popup
-omarchy-shell io.github.edgarsilva.hw-monitor toggle
+omarchy-shell meviusisback.hw-monitor toggle
 
 # Toggle Celsius / Fahrenheit
-omarchy-shell io.github.edgarsilva.hw-monitor toggleFahrenheit
+omarchy-shell meviusisback.hw-monitor toggleFahrenheit
 
 # Cycle the display mode
-omarchy-shell io.github.edgarsilva.hw-monitor cycleMode
+omarchy-shell meviusisback.hw-monitor cycleMode
 
 # Force an immediate resample
-omarchy-shell io.github.edgarsilva.hw-monitor refresh
+omarchy-shell meviusisback.hw-monitor refresh
 
 # Dump the full multi-line telemetry breakdown
-omarchy-shell io.github.edgarsilva.hw-monitor status
+omarchy-shell meviusisback.hw-monitor status
 ```
+
+## Credits
+
+Based on [Edgar Silva's omarchy-hw-monitor](https://github.com/edgarsilva/omarchy-hw-monitor)
+(MIT). This fork continues the plugin — the original repository has been
+inactive since August 2026 — with the Noctalia-style readout, the visual
+system panel, and per-widget settings. The original MIT license is preserved;
+copyright lines in [LICENSE](LICENSE) reflect both authors.

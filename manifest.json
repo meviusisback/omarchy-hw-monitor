@@ -1,12 +1,13 @@
 {
   "$schema": "https://raw.githubusercontent.com/omarchy/omarchy/main/schemas/plugin.json",
   "schemaVersion": 1,
-  "id": "io.github.edgarsilva.hw-monitor",
+  "id": "meviusisback.hw-monitor",
   "name": "Hardware Monitor",
   "version": "1.1.0",
-  "author": "Edgar Silva",
+  "author": "meviusisback (original by Edgar Silva)",
   "license": "MIT",
   "description": "GPU, CPU, temperature, and RAM in the bar as sleek icon + figure readouts, with a first-class visual system panel.",
+  "repository": "https://github.com/meviusisback/omarchy-hw-monitor",
   "kinds": [
     "bar-widget"
   ],
