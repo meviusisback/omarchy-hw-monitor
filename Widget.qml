@@ -596,7 +596,7 @@ Panel {
           fontSize: root.iconSize
           color: group.isTempCell
             ? root.tempColor(modelData.tempC)
-            : root.warm(Color.accent, modelData.severity)
+            : root.warm(root.base, modelData.severity)
           Behavior on color { ColorAnimation { duration: 240 } }
         }
 
@@ -607,7 +607,7 @@ Panel {
           text: modelData.icon
           color: group.isTempCell
             ? root.tempColor(modelData.tempC)
-            : root.warm(Color.accent, modelData.severity)
+            : root.warm(root.base, modelData.severity)
           font.family: root.fontFamily
           font.pixelSize: root.iconSize
           renderType: Text.NativeRendering
