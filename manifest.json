@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "id": "meviusisback.hw-monitor",
   "name": "Hardware Monitor",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": "meviusisback (original by Edgar Silva)",
   "license": "MIT",
   "description": "GPU, CPU, temperature, and RAM in the bar as sleek icon + figure readouts, with a first-class visual system panel.",
@@ -22,7 +22,12 @@
     "defaultSection": "right",
     "defaults": {
       "mode": "icons",
-      "itemsOrder": ["gpu", "cpu", "cpu-temp", "ram"],
+      "itemsOrder": [
+        "gpu",
+        "cpu",
+        "cpu-temp",
+        "ram"
+      ],
       "refreshIntervalSec": 2,
       "showGpu": true,
       "showCpu": true,
@@ -41,12 +46,12 @@
       "criticalPercent": 90,
       "warnTempC": 75,
       "criticalTempC": 90,
-      "gpuIcon": "󰾲",
-      "cpuIcon": "",
-      "tempIcon": "",
-      "gpuTempIcon": "󰔏",
-      "ramIcon": "",
-      "clockIcon": "󰓅",
+      "gpuIcon": "\udb83\udfb2",
+      "cpuIcon": "\uf4bc",
+      "tempIcon": "\uf2c9",
+      "gpuTempIcon": "\udb81\udd0f",
+      "ramIcon": "\uefc5",
+      "clockIcon": "\udb81\udcc5",
       "clickCommand": "",
       "percentPad": "none",
       "monitors": []
@@ -133,14 +138,14 @@
           "bare"
         ],
         "defaultValue": "degree-unit",
-        "description": "'degree-unit' (45°C/113°F), 'degree' (45°), 'unit' (45C), 'unit-lower' (45c), or 'bare' (45)."
+        "description": "'degree-unit' (45\u00b0C/113\u00b0F), 'degree' (45\u00b0), 'unit' (45C), 'unit-lower' (45c), or 'bare' (45)."
       },
       {
         "key": "fahrenheit",
         "type": "boolean",
-        "label": "Use Fahrenheit (°F)",
+        "label": "Use Fahrenheit (\u00b0F)",
         "defaultValue": false,
-        "description": "Display temperatures in Fahrenheit (°F) instead of Celsius (°C)."
+        "description": "Display temperatures in Fahrenheit (\u00b0F) instead of Celsius (\u00b0C)."
       },
       {
         "key": "percentPad",
@@ -189,37 +194,37 @@
         "key": "gpuIcon",
         "type": "string",
         "label": "GPU glyph",
-        "defaultValue": "󰾲"
+        "defaultValue": "\udb83\udfb2"
       },
       {
         "key": "cpuIcon",
         "type": "string",
         "label": "CPU glyph",
-        "defaultValue": ""
+        "defaultValue": "\uf4bc"
       },
       {
         "key": "tempIcon",
         "type": "string",
         "label": "Temperature glyph",
-        "defaultValue": ""
+        "defaultValue": "\uf2c9"
       },
       {
         "key": "gpuTempIcon",
         "type": "string",
         "label": "GPU Temperature glyph",
-        "defaultValue": "󰔏"
+        "defaultValue": "\udb81\udd0f"
       },
       {
         "key": "ramIcon",
         "type": "string",
         "label": "Memory glyph",
-        "defaultValue": ""
+        "defaultValue": "\uefc5"
       },
       {
         "key": "clockIcon",
         "type": "string",
         "label": "Clock glyph",
-        "defaultValue": "󰓅"
+        "defaultValue": "\udb81\udcc5"
       },
       {
         "key": "iconSize",
@@ -252,7 +257,7 @@
       {
         "key": "warnTempC",
         "type": "integer",
-        "label": "Warning temp (°C)",
+        "label": "Warning temp (\u00b0C)",
         "min": 1,
         "max": 150,
         "step": 1,
@@ -261,7 +266,7 @@
       {
         "key": "criticalTempC",
         "type": "integer",
-        "label": "Critical temp (°C)",
+        "label": "Critical temp (\u00b0C)",
         "min": 1,
         "max": 150,
         "step": 1,
