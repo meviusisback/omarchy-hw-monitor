@@ -6,7 +6,7 @@
   "version": "1.1.1",
   "author": "meviusisback (original by Edgar Silva)",
   "license": "MIT",
-  "description": "GPU, CPU, temperature, and RAM in the bar as sleek icon + figure readouts, with a first-class visual system panel.",
+  "description": "GPU, CPU, temperature, and RAM in the bar as sleek icon + figure readouts, with a first-class visual system panel including top processes by RAM.",
   "repository": "https://github.com/meviusisback/omarchy-hw-monitor",
   "kinds": [
     "bar-widget"
@@ -16,7 +16,7 @@
   },
   "barWidget": {
     "displayName": "Hardware Monitor",
-    "description": "GPU, CPU, temperature, and RAM load as sleek icon readouts, vertical gauges, or spelled out words. Left click opens the system telemetry panel.",
+    "description": "GPU, CPU, temperature, and RAM load as sleek icon readouts, vertical gauges, or spelled out words. Left click opens the system telemetry panel with top processes by RAM.",
     "category": "System",
     "allowMultiple": true,
     "defaultSection": "right",
@@ -34,6 +34,8 @@
       "showCpuTemp": true,
       "showGpuTemp": false,
       "showRam": true,
+      "showTopProcs": true,
+      "topProcCount": 8,
       "showGauges": true,
       "showValues": false,
       "showClocks": false,
@@ -111,6 +113,23 @@
         "label": "Show memory",
         "defaultValue": true,
         "description": "Show RAM / memory usage."
+      },
+      {
+        "key": "showTopProcs",
+        "type": "boolean",
+        "label": "Show top processes",
+        "defaultValue": true,
+        "description": "Show the top processes by RAM in the system panel (sampled only while the panel is open)."
+      },
+      {
+        "key": "topProcCount",
+        "type": "integer",
+        "label": "Top process count",
+        "min": 3,
+        "max": 12,
+        "step": 1,
+        "defaultValue": 8,
+        "description": "How many processes to list in the top-processes section (3-12, sorted by RAM)."
       },
       {
         "key": "ramFormat",

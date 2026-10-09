@@ -67,6 +67,7 @@ Panel {
   readonly property bool showCpuTemp: boolSetting("showCpuTemp", true)
   readonly property bool showGpuTemp: boolSetting("showGpuTemp", false)
   readonly property bool showRam: boolSetting("showRam", true)
+  readonly property bool showTopProcs: boolSetting("showTopProcs", true)
 
   readonly property var itemOrder: {
     var raw = setting("itemsOrder", ["gpu", "cpu", "cpu-temp", "ram"])
@@ -545,6 +546,7 @@ Panel {
     showCpuTemp: root.showCpuTemp
     showGpuTemp: root.showGpuTemp
     showRam: root.showRam
+    showTopProcs: root.showTopProcs
     showClocks: root.showClocks
     showGauges: root.showGauges
     ramFormat: root.ramFormat
