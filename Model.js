@@ -234,13 +234,15 @@ function formatRpm(rpm) {
 
 // Difesa-in-profondità: proc_top.py sanifica già tutto, qui si valida di
 // nuovo perché lo stdout di un subprocess è input non fidato. Ritorna sempre
-// un array (vuoto su qualsiasi forma inattesa); tronca a maxN righe, nomi a
-// 48 char, numeri clampati ai range. Ordine (per RSS decrescente) preservato.
+// {rows, groupedBy} (righe vuote su qualsiasi forma inattesa); tronca a maxN
+// righe, nomi a 48 char, numeri clampati ai range. Ordine del collector
+// (per metrica scelta) preservato.
 var PROC_TOP_MAX = 12
 var PROC_NAME_MAX = 48
+var PROC_GROUPEDS = ["none", "scope", "comm"]
 
 function parseProcTop(raw, maxN) {
-  var out = []
+  var out = { rows: [], groupedBy: "none" }
   var limit = maxN === undefined ? PROC_TOP_MAX : Math.max(1, Math.min(PROC_TOP_MAX, toNumber(maxN, PROC_TOP_MAX)))
   var text = String(raw || "").trim()
   if (text === "" || text.length > 16384) return out
@@ -251,7 +253,9 @@ function parseProcTop(raw, maxN) {
     return out
   }
   if (!parsed || !(parsed.procs instanceof Array)) return out
-  for (var i = 0; i < parsed.procs.length && out.length < limit; i++) {
+  var groupedBy = String(parsed.groupedBy === undefined || parsed.groupedBy === null ? "none" : parsed.groupedBy)
+  out.groupedBy = PROC_GROUPEDS.indexOf(groupedBy) === -1 ? "none" : groupedBy
+  for (var i = 0; i < parsed.procs.length && out.rows.length < limit; i++) {
     var p = parsed.procs[i]
     if (!p || typeof p !== "object") continue
     var pid = Math.floor(toNumber(p.pid, -1))
@@ -259,11 +263,15 @@ function parseProcTop(raw, maxN) {
     var name = String(p.name === undefined || p.name === null ? "" : p.name).replace(/[\r\n\t]/g, " ").trim()
     if (name === "") name = "?"
     if (name.length > PROC_NAME_MAX) name = name.substring(0, PROC_NAME_MAX)
+    var count = Math.floor(toNumber(p.count, 1))
+    if (!isFinite(count) || count < 1) count = 1
+    if (count > 4096) count = 4096
     var rssKib = Math.floor(toNumber(p.rssKib, -1))
     if (rssKib < 0 || rssKib > 68719476736) continue
-    out.push({
+    out.rows.push({
       pid: pid,
       name: name,
+      count: count,
       cpu: clamp(toNumber(p.cpu, 0), 0, 100),
       rssKib: rssKib,
       memPct: clamp(toNumber(p.memPct, 0), 0, 100)

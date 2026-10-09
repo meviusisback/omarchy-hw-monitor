@@ -73,7 +73,17 @@ Item {
   property bool procPanelOpen: false
   property string procTopTime: ""
   property bool procTopFailed: false
-  readonly property int topProcCount: intSetting("topProcCount", 8, 3, 12)
+  property string procGroupedBy: "none"
+  readonly property int topProcCount: intSetting("topProcCount", 6, 3, 12)
+  readonly property string topProcSort: {
+    var want = String(setting("topProcSort", "ram")).trim().toLowerCase()
+    return want === "cpu" ? "cpu" : "ram"
+  }
+  readonly property bool topProcGroup: {
+    var value = setting("topProcGroup", true)
+    if (typeof value === "boolean") return value
+    return String(value).trim().toLowerCase() !== "false"
+  }
   readonly property string procTopPath: pluginDir + "/proc_top.py"
   property double _lastProcTopTry: 0
   property double _lastProcTopOk: 0
@@ -191,16 +201,30 @@ Item {
     gpuVramTotalBytes = sample.vramTotalBytes
   }
 
-  // Lancia proc_top.py al massimo ogni 3 s. Argv assoluti e fissi (niente PATH,
-  // niente shell, unico argomento intero clampato): nessuna injection possibile.
+  // Lancia proc_top.py al massimo ogni 3 s. Solo valori allowlist in argv
+  // (intero clampato, sort ram/cpu validato, flag --group per presenza):
+  // la stringa grezza del setting non tocca mai argv. Niente PATH, niente shell.
   function refreshProcTop() {
     if (!active || !procPanelOpen || procTopProcess.running) return
     var now = Date.now()
     if (_lastProcTopTry > 0 && now - _lastProcTopTry < 3000) return
     _lastProcTopTry = now
-    procTopProcess.command = ["/usr/bin/python3", procTopPath, "--top", String(topProcCount)]
+    var cmd = ["/usr/bin/python3", procTopPath, "--top", String(topProcCount), "--sort", topProcSort]
+    if (topProcGroup) cmd.push("--group")
+    procTopProcess.command = cmd
     procTopProcess.running = true
     procTopWatchdog.restart()
+  }
+
+  // Cambio sort/raggruppamento → refresh immediato (throttle azzerato).
+  // Le guardie in refreshProcTop restano valide: a pannello chiuso non parte.
+  onTopProcSortChanged: {
+    _lastProcTopTry = 0
+    refreshProcTop()
+  }
+  onTopProcGroupChanged: {
+    _lastProcTopTry = 0
+    refreshProcTop()
   }
 
   // ----------------------------------------------------------------- files
@@ -299,9 +323,11 @@ Item {
       waitForEnd: true
       onStreamFinished: {
         procTopWatchdog.stop()
-        var list = Model.parseProcTop(text, 12)
+        var res = Model.parseProcTop(text, 12)
+        var list = res.rows
         if (list.length > 0 || String(text).indexOf('"procs"') !== -1) {
           root.topProcs = list
+          root.procGroupedBy = res.groupedBy
           root.procTopFailed = false
           root._lastProcTopOk = Date.now()
           var d = new Date(root._lastProcTopOk)
