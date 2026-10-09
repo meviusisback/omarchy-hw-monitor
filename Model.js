@@ -230,6 +230,48 @@ function formatRpm(rpm) {
   return rpm === 0 ? "idle" : Math.round(rpm) + " rpm"
 }
 
+// ------------------------------------------------------------ top processes
+
+// Difesa-in-profondità: proc_top.py sanifica già tutto, qui si valida di
+// nuovo perché lo stdout di un subprocess è input non fidato. Ritorna sempre
+// un array (vuoto su qualsiasi forma inattesa); tronca a maxN righe, nomi a
+// 48 char, numeri clampati ai range. Ordine (per RSS decrescente) preservato.
+var PROC_TOP_MAX = 12
+var PROC_NAME_MAX = 48
+
+function parseProcTop(raw, maxN) {
+  var out = []
+  var limit = maxN === undefined ? PROC_TOP_MAX : Math.max(1, Math.min(PROC_TOP_MAX, toNumber(maxN, PROC_TOP_MAX)))
+  var text = String(raw || "").trim()
+  if (text === "" || text.length > 16384) return out
+  var parsed = null
+  try {
+    parsed = JSON.parse(text)
+  } catch (e) {
+    return out
+  }
+  if (!parsed || !(parsed.procs instanceof Array)) return out
+  for (var i = 0; i < parsed.procs.length && out.length < limit; i++) {
+    var p = parsed.procs[i]
+    if (!p || typeof p !== "object") continue
+    var pid = Math.floor(toNumber(p.pid, -1))
+    if (pid <= 0 || pid > 4194304) continue
+    var name = String(p.name === undefined || p.name === null ? "" : p.name).replace(/[\r\n\t]/g, " ").trim()
+    if (name === "") name = "?"
+    if (name.length > PROC_NAME_MAX) name = name.substring(0, PROC_NAME_MAX)
+    var rssKib = Math.floor(toNumber(p.rssKib, -1))
+    if (rssKib < 0 || rssKib > 68719476736) continue
+    out.push({
+      pid: pid,
+      name: name,
+      cpu: clamp(toNumber(p.cpu, 0), 0, 100),
+      rssKib: rssKib,
+      memPct: clamp(toNumber(p.memPct, 0), 0, 100)
+    })
+  }
+  return out
+}
+
 // ------------------------------------------------------------------ severity
 //
 // 0 while a reading is unremarkable, ramping to 1 as it crosses from `warn` to

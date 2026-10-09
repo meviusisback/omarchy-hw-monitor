@@ -29,6 +29,8 @@
       "showCpuTemp": true,
       "showGpuTemp": false,
       "showRam": true,
+      "showTopProcs": true,
+      "topProcCount": 8,
       "showGauges": true,
       "showValues": false,
       "showClocks": false,
@@ -106,6 +108,23 @@
         "label": "Show memory",
         "defaultValue": true,
         "description": "Show RAM / memory usage."
+      },
+      {
+        "key": "showTopProcs",
+        "type": "boolean",
+        "label": "Show top processes",
+        "defaultValue": true,
+        "description": "Show the top processes by RAM in the system panel (sampled only while the panel is open)."
+      },
+      {
+        "key": "topProcCount",
+        "type": "integer",
+        "label": "Top process count",
+        "min": 3,
+        "max": 12,
+        "step": 1,
+        "defaultValue": 8,
+        "description": "How many processes to list in the top-processes section (3-12, sorted by RAM)."
       },
       {
         "key": "ramFormat",

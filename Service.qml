@@ -65,6 +65,18 @@ Item {
   readonly property real gpuVramPercent: gpuVramTotalBytes > 0
     ? Model.clamp(100 * gpuVramUsedBytes / gpuVramTotalBytes, 0, 100) : -1
 
+  // Top processi per RAM: campionati solo a pannello aperto, mai in background.
+  // Lo stato vive qui (persiste con la shell); il worker è per-tick e non
+  // sopravvive tra i poll. Guardia singola: procTopProcess.running.
+  property var topProcs: []
+  property bool procPanelOpen: false
+  property string procTopTime: ""
+  property bool procTopFailed: false
+  readonly property int topProcCount: intSetting("topProcCount", 8, 3, 12)
+  readonly property string procTopPath: pluginDir + "/proc_top.py"
+  property double _lastProcTopTry: 0
+  property double _lastProcTopOk: 0
+
   // Cumulative jiffies from the previous tick. CPU usage is the ratio between
   // two samples, so there is nothing to show until the second one lands.
   property var _prevJiffies: null
@@ -178,6 +190,18 @@ Item {
     gpuVramTotalBytes = sample.vramTotalBytes
   }
 
+  // Lancia proc_top.py al massimo ogni 3 s. Argv assoluti e fissi (niente PATH,
+  // niente shell, unico argomento intero clampato): nessuna injection possibile.
+  function refreshProcTop() {
+    if (!active || !procPanelOpen || procTopProcess.running) return
+    var now = Date.now()
+    if (_lastProcTopTry > 0 && now - _lastProcTopTry < 3000) return
+    _lastProcTopTry = now
+    procTopProcess.command = ["/usr/bin/python3", procTopPath, "--top", String(topProcCount)]
+    procTopProcess.running = true
+    procTopWatchdog.restart()
+  }
+
   // ----------------------------------------------------------------- files
   //
   // blockAllReads makes reload() synchronous: without it text() returns the
@@ -262,6 +286,48 @@ Item {
     id: nvidiaProcess
     stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyNvidia(text) }
     stderr: StdioCollector { waitForEnd: true }
+  }
+
+  // Worker top-processi: esecuzione diretta (mai sh -c), stdout limitato a una
+  // riga JSON <16 KB, validato da Model.parseProcTop. Fallimento soft: tiene
+  // l'ultimo valore buono e alza procTopFailed invece di svuotare la sezione.
+  Process {
+    id: procTopProcess
+    stdout: StdioCollector {
+      id: procTopOut
+      waitForEnd: true
+      onStreamFinished: {
+        procTopWatchdog.stop()
+        var list = Model.parseProcTop(text, 12)
+        if (list.length > 0 || String(text).indexOf('"procs"') !== -1) {
+          root.topProcs = list
+          root.procTopFailed = false
+          root._lastProcTopOk = Date.now()
+          var d = new Date(root._lastProcTopOk)
+          var hh = d.getHours()
+          var mm = d.getMinutes()
+          var ss = d.getSeconds()
+          root.procTopTime = (hh < 10 ? "0" + hh : "" + hh) + ":" + (mm < 10 ? "0" + mm : "" + mm) + ":" + (ss < 10 ? "0" + ss : "" + ss)
+        } else {
+          root.procTopFailed = true
+        }
+      }
+    }
+    stderr: StdioCollector { waitForEnd: true }
+    onExited: procTopWatchdog.stop()
+  }
+
+  // Watchdog kill-before-next-tick: 0.4 s di lettura interna << 2 s << 3 s di
+  // throttle. Uccide il runaway e marca lo stallo; il latch si pulisce anche
+  // in onExited così non resta mai incastrato se lo spawn fallisce.
+  Timer {
+    id: procTopWatchdog
+    interval: 2000
+    repeat: false
+    onTriggered: {
+      if (procTopProcess.running) procTopProcess.running = false
+      root.procTopFailed = true
+    }
   }
 
   // -------------------------------------------------------------- lifetime

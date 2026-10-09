@@ -25,6 +25,7 @@ KeyboardPanel {
   property bool showCpuTemp: true
   property bool showGpuTemp: false
   property bool showRam: true
+  property bool showTopProcs: true
   property bool showClocks: false
   property bool showGauges: false
   property string ramFormat: "used/total"
@@ -105,11 +106,14 @@ KeyboardPanel {
   onOpenChanged: {
     if (open) {
       hw.sample()
+      hw.procPanelOpen = true
+      hw.refreshProcTop()
       var initial = hw.cpuPercent >= 0 ? hw.cpuPercent : 0
       root.cpuHistory = [initial, initial]
     } else {
       root.cpuHistory = []
       root.settingsOpen = false
+      hw.procPanelOpen = false
     }
   }
 
@@ -145,6 +149,7 @@ KeyboardPanel {
       running: root.open
       onTriggered: {
         hw.sample()
+        hw.refreshProcTop()
         var cur = hw.cpuPercent >= 0 ? hw.cpuPercent : 0
         var arr = root.cpuHistory.slice()
         arr.push(cur)
@@ -923,6 +928,154 @@ KeyboardPanel {
                   value: hw.memory && hw.memory.swapTotalKib > 0 ? (Model.formatGib(Model.gibFromKib(hw.memory.swapTotalKib)) + " GiB") : "None"
                 }
               }
+            }
+          }
+        }
+
+        // 5b. Top Processes by RAM (only while the panel is open)
+        Rectangle {
+          width: parent.width
+          implicitHeight: topProcCol.implicitHeight + Style.space(24)
+          color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.04)
+          border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.10)
+          border.width: 1
+          radius: Style.cornerRadius
+          visible: root.showTopProcs
+          opacity: hw.procTopFailed && hw.topProcs.length === 0 ? 0.7 : 1
+
+          Column {
+            id: topProcCol
+            anchors.fill: parent
+            anchors.margins: Style.space(12)
+            spacing: Style.space(8)
+
+            Row {
+              width: parent.width
+              spacing: Style.space(6)
+
+              Text {
+                textFormat: Text.PlainText
+                text: "\uf03a"
+                color: Color.accent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                text: "Top processi"
+                color: root.baseColor
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
+              }
+
+              Item {
+                width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[1].implicitWidth - parent.children[3].implicitWidth - parent.spacing * 3)
+                height: 1
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                text: hw.procTopTime !== "" ? ("per RAM \u00b7 " + hw.procTopTime) : "per RAM"
+                color: Qt.darker(root.baseColor, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
+              }
+            }
+
+            Column {
+              width: parent.width
+              spacing: Style.space(6)
+              visible: hw.topProcs.length > 0
+
+              Repeater {
+                model: hw.topProcs
+                delegate: Column {
+                  required property var modelData
+                  required property int index
+
+                  width: parent.width
+                  spacing: Style.space(3)
+
+                  readonly property int total: hw.topProcs.length
+                  readonly property real topRss: total > 0 ? Math.max(1, hw.topProcs[0].rssKib) : 1
+                  readonly property real rankSev: total > 1 ? (1 - index / (total - 1)) : 1
+                  readonly property real combinedSev: Math.max(0.35 + 0.65 * rankSev,
+                    Model.severity(modelData.memPct, root.warnPercent, root.criticalPercent))
+                  readonly property color sevColor: root.warm(root.baseColor, combinedSev)
+
+                  Row {
+                    width: parent.width
+                    spacing: Style.space(6)
+
+                    Text {
+                      id: procRank
+                      textFormat: Text.PlainText
+                      text: (index + 1) + "."
+                      color: sevColor
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      font.bold: true
+                      anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      width: Math.max(40, parent.width - procRank.implicitWidth - procFigs.implicitWidth - parent.spacing * 2)
+                      elide: Text.ElideRight
+                      text: modelData.name + "  (" + modelData.pid + ")"
+                      color: root.baseColor
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.bodySmall
+                      anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                      id: procFigs
+                      textFormat: Text.PlainText
+                      anchors.verticalCenter: parent.verticalCenter
+                      text: Model.formatGib(Model.gibFromKib(modelData.rssKib)) + " GiB \u00b7 CPU " + Math.round(modelData.cpu) + "%"
+                      color: sevColor
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                    }
+                  }
+
+                  Rectangle {
+                    width: parent.width
+                    height: Style.space(5)
+                    radius: height / 2
+                    color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
+
+                    Rectangle {
+                      anchors.left: parent.left
+                      anchors.top: parent.top
+                      anchors.bottom: parent.bottom
+                      radius: parent.radius
+                      color: sevColor
+                      width: Math.max(parent.height, Math.min(parent.width, parent.width * (modelData.rssKib / topRss)))
+                      Behavior on width { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
+                    }
+                  }
+                }
+              }
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              visible: hw.topProcs.length === 0
+              width: parent.width
+              wrapMode: Text.Wrap
+              text: hw.procTopFailed ? "Dati processi non disponibili (python3 assente o lettura fallita)." : "Raccolta dati processi\u2026"
+              color: Qt.darker(root.baseColor, 1.4)
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
             }
           }
         }
