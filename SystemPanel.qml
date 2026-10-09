@@ -1280,6 +1280,7 @@ KeyboardPanel {
 
     Text {
       id: chipLabel
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: chip.label
       color: chip.selected ? Color.foreground : root.baseColor
