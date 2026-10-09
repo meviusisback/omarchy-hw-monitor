@@ -197,7 +197,7 @@
           "trail"
         ],
         "defaultValue": "none",
-        "description": "How percentages hold width: 'none' (natural flow), 'zero' (03%), 'lead' ( 3%), or 'trail'."
+        "description": "How percentages hold width: 'none' (natural flow), 'zero' (03%), 'lead' ( 3%), or 'trail'. Figure cells always reserve slot width in every mode."
       },
       {
         "key": "showGauges",
