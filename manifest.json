@@ -35,7 +35,9 @@
       "showGpuTemp": false,
       "showRam": true,
       "showTopProcs": true,
-      "topProcCount": 8,
+      "topProcCount": 6,
+      "topProcSort": "ram",
+      "topProcGroup": true,
       "showGauges": true,
       "showValues": false,
       "showClocks": false,
@@ -128,8 +130,26 @@
         "min": 3,
         "max": 12,
         "step": 1,
-        "defaultValue": 8,
-        "description": "How many processes to list in the top-processes section (3-12, sorted by RAM)."
+        "defaultValue": 6,
+        "description": "How many processes to list in the top-processes section (3-12, sorted by the active metric)."
+      },
+      {
+        "key": "topProcSort",
+        "type": "enum",
+        "label": "Top process metric",
+        "options": [
+          "ram",
+          "cpu"
+        ],
+        "defaultValue": "ram",
+        "description": "Sort top processes by RAM or CPU load."
+      },
+      {
+        "key": "topProcGroup",
+        "type": "boolean",
+        "label": "Group by application",
+        "defaultValue": true,
+        "description": "Collapse processes by application (systemd scope, comm-name fallback) with summed RAM/CPU and process counts."
       },
       {
         "key": "ramFormat",
@@ -177,7 +197,7 @@
           "trail"
         ],
         "defaultValue": "none",
-        "description": "How percentages hold width: 'none' (natural flow), 'zero' (03%), 'lead' ( 3%), or 'trail'."
+        "description": "How percentages hold width: 'none' (natural flow), 'zero' (03%), 'lead' ( 3%), or 'trail'. Figure cells always reserve slot width in every mode."
       },
       {
         "key": "showGauges",

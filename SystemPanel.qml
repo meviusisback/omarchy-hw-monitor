@@ -62,6 +62,17 @@ KeyboardPanel {
                    from.a)
   }
 
+  // Gradiente della sezione Top processi: base verso l'accent del tema
+  // (blu chiaro), mai verso urgent — la severità resta leggibile senza urlare.
+  function accentMix(amount) {
+    if (!(amount > 0)) return baseColor
+    var t = Math.min(1, amount)
+    return Qt.rgba(baseColor.r + (Color.accent.r - baseColor.r) * t,
+                   baseColor.g + (Color.accent.g - baseColor.g) * t,
+                   baseColor.b + (Color.accent.b - baseColor.b) * t,
+                   baseColor.a)
+  }
+
   function tempColor(tempC) {
     if (!isFinite(tempC) || tempC <= 0) return dimColor
     if (tempC < 50) return dimColor
@@ -119,7 +130,7 @@ KeyboardPanel {
 
   focusTarget: keyCatcher
   contentWidth: fittedContentWidth(Style.space(500))
-  contentHeight: fittedContentHeight(panelColumn.implicitHeight + Style.space(16), Style.space(960))
+  contentHeight: fittedContentHeight(panelColumn.implicitHeight + Style.space(16), Style.space(1100))
 
   PanelKeyCatcher {
     id: keyCatcher
@@ -954,6 +965,7 @@ KeyboardPanel {
               spacing: Style.space(6)
 
               Text {
+                id: procTopIcon
                 textFormat: Text.PlainText
                 text: "\uf03a"
                 color: Color.accent
@@ -972,14 +984,43 @@ KeyboardPanel {
                 anchors.verticalCenter: parent.verticalCenter
               }
 
+              ModeChip {
+                id: sortRamChip
+                label: "RAM"
+                selected: hw.topProcSort === "ram"
+                anchors.verticalCenter: parent.verticalCenter
+                onPicked: root.persistSetting("topProcSort", "ram")
+              }
+
+              ModeChip {
+                id: sortCpuChip
+                label: "CPU"
+                selected: hw.topProcSort === "cpu"
+                anchors.verticalCenter: parent.verticalCenter
+                onPicked: root.persistSetting("topProcSort", "cpu")
+              }
+
+              ModeChip {
+                id: groupChip
+                label: "Raggruppa"
+                selected: hw.topProcGroup
+                anchors.verticalCenter: parent.verticalCenter
+                onPicked: root.persistSetting("topProcGroup", !hw.topProcGroup)
+              }
+
               Item {
-                width: Math.max(0, parent.width - parent.children[0].implicitWidth - parent.children[1].implicitWidth - parent.children[3].implicitWidth - parent.spacing * 3)
+                width: Math.max(0, parent.width - procTopIcon.implicitWidth - parent.children[1].implicitWidth - sortRamChip.implicitWidth - sortCpuChip.implicitWidth - groupChip.implicitWidth - procTopStamp.implicitWidth - parent.spacing * 6)
                 height: 1
               }
 
               Text {
+                id: procTopStamp
                 textFormat: Text.PlainText
-                text: hw.procTopTime !== "" ? ("per RAM \u00b7 " + hw.procTopTime) : "per RAM"
+                text: {
+                  var metric = hw.topProcSort === "cpu" ? "per CPU" : "per RAM"
+                  if (hw.procTopTime === "") return metric
+                  return metric + " \u00b7 " + hw.procTopTime
+                }
                 color: Qt.darker(root.baseColor, 1.4)
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.caption
@@ -1003,11 +1044,16 @@ KeyboardPanel {
                   spacing: Style.space(3)
 
                   readonly property int total: hw.topProcs.length
+                  readonly property bool sortCpu: hw.topProcSort === "cpu"
                   readonly property real topRss: total > 0 ? Math.max(1, hw.topProcs[0].rssKib) : 1
+                  readonly property real topCpu: total > 0 ? Math.max(0, hw.topProcs[0].cpu) : 0
+                  readonly property bool useCpuBars: sortCpu && topCpu > 0
+                  readonly property real metricVal: sortCpu ? modelData.cpu : modelData.memPct
+                  readonly property real shareD: useCpuBars ? modelData.cpu / Math.max(1, topCpu) : modelData.rssKib / topRss
                   readonly property real rankSev: total > 1 ? (1 - index / (total - 1)) : 1
                   readonly property real combinedSev: Math.max(0.35 + 0.65 * rankSev,
-                    Model.severity(modelData.memPct, root.warnPercent, root.criticalPercent))
-                  readonly property color sevColor: root.warm(root.baseColor, combinedSev)
+                    Model.severity(metricVal, root.warnPercent, root.criticalPercent))
+                  readonly property color sevColor: root.accentMix(combinedSev)
 
                   Row {
                     width: parent.width
@@ -1028,7 +1074,7 @@ KeyboardPanel {
                       textFormat: Text.PlainText
                       width: Math.max(40, parent.width - procRank.implicitWidth - procFigs.implicitWidth - parent.spacing * 2)
                       elide: Text.ElideRight
-                      text: modelData.name + "  (" + modelData.pid + ")"
+                      text: modelData.count > 1 ? (modelData.name + "  \u00b7 " + modelData.count + " processi") : (modelData.name + "  (" + modelData.pid + ")")
                       color: root.baseColor
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.bodySmall
@@ -1059,7 +1105,7 @@ KeyboardPanel {
                       anchors.bottom: parent.bottom
                       radius: parent.radius
                       color: sevColor
-                      width: Math.max(parent.height, Math.min(parent.width, parent.width * (modelData.rssKib / topRss)))
+                      width: Math.max(parent.height, Math.min(parent.width, parent.width * shareD))
                       Behavior on width { NumberAnimation { duration: 240; easing.type: Easing.OutCubic } }
                     }
                   }
@@ -1233,9 +1279,10 @@ KeyboardPanel {
 
     Text {
       id: chipLabel
+      textFormat: Text.PlainText
       anchors.centerIn: parent
       text: chip.label
-      color: chip.selected ? Color.foreground : root.baseColor
+      color: chip.selected ? Qt.darker(chip.activeColor, 2.4) : root.baseColor
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
       font.bold: chip.selected

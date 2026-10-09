@@ -167,12 +167,31 @@ Panel {
   }
 
   readonly property int percentSlot: Math.ceil(percentMetrics.advanceWidth)
+  readonly property int tempSlot: Math.ceil(tempMetrics.advanceWidth)
+  readonly property int ramSlot: Math.ceil(ramMetrics.advanceWidth)
 
   TextMetrics {
     id: percentMetrics
     font.family: root.fontFamily
     font.pixelSize: root.valueSize
     text: "100%"
+  }
+
+  TextMetrics {
+    id: tempMetrics
+    font.family: root.fontFamily
+    font.pixelSize: root.valueSize
+    text: "100°C"
+  }
+
+  // Representative widest figure per RAM format; the cell never shrinks below
+  // this, so neighbours stop dancing when a digit comes or goes. Wider values
+  // still grow naturally instead of clipping.
+  TextMetrics {
+    id: ramMetrics
+    font.family: root.fontFamily
+    font.pixelSize: root.valueSize
+    text: root.ramFormat === "percent" ? "100%" : (root.ramFormat === "used/total" ? "00.0/00G" : "00.0G")
   }
 
   // --------------------------------------------------------------- readings
@@ -567,8 +586,13 @@ Panel {
       required property var modelData
       spacing: Style.space(4)
 
-      readonly property real slack: root.showValues && modelData.slotted
-        ? Math.max(0, root.percentSlot - valueText.implicitWidth - spacing)
+      // Every figure cell reserves its slot width: a single-digit value keeps
+      // an invisible trailing gap instead of pulling its neighbours around.
+      // The old trail-only reservation is subsumed by this.
+      readonly property int figureSlot: group.isTempCell ? root.tempSlot
+        : (modelData.key === "ram" ? root.ramSlot : root.percentSlot)
+      readonly property real slack: root.showValues
+        ? Math.max(0, group.figureSlot - valueText.implicitWidth - spacing)
         : 0
 
       readonly property bool isTempCell: modelData.key === "cpu-temp" || modelData.key === "gpu-temp"
@@ -723,6 +747,7 @@ Panel {
         Text {
           textFormat: Text.PlainText
           height: root.contentHeight
+          width: Math.max(implicitWidth, root.tempSlot)
           text: modelData.temp
           color: root.tempColor(modelData.tempC)
           font.family: root.fontFamily

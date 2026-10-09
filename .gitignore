@@ -3,3 +3,6 @@
 # Editor / OS junk
 *~
 .DS_Store
+# Python bytecode (never commit .pyc)
+__pycache__/
+*.pyc

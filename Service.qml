@@ -73,10 +73,23 @@ Item {
   property bool procPanelOpen: false
   property string procTopTime: ""
   property bool procTopFailed: false
-  readonly property int topProcCount: intSetting("topProcCount", 8, 3, 12)
+  property string procGroupedBy: "none"
+  readonly property int topProcCount: intSetting("topProcCount", 6, 3, 12)
+  readonly property string topProcSort: {
+    var want = String(setting("topProcSort", "ram")).trim().toLowerCase()
+    return want === "cpu" ? "cpu" : "ram"
+  }
+  readonly property bool topProcGroup: {
+    var value = setting("topProcGroup", true)
+    if (typeof value === "boolean") return value
+    return String(value).trim().toLowerCase() !== "false"
+  }
   readonly property string procTopPath: pluginDir + "/proc_top.py"
   property double _lastProcTopTry: 0
   property double _lastProcTopOk: 0
+  // Veto anti-teardown: nessun handler tocca più lo stato dopo l'inizio
+  // della distruzione (finestra di reload). Vedi onDestruction in fondo.
+  property bool _destroyed: false
 
   // Cumulative jiffies from the previous tick. CPU usage is the ratio between
   // two samples, so there is nothing to show until the second one lands.
@@ -173,7 +186,7 @@ Item {
   }
 
   function sampleNvidia() {
-    if (nvidiaProcess.running) return
+    if (_destroyed || nvidiaProcess.running) return
     nvidiaProcess.command = ["nvidia-smi",
                              "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw",
                              "--format=csv,noheader,nounits",
@@ -191,16 +204,30 @@ Item {
     gpuVramTotalBytes = sample.vramTotalBytes
   }
 
-  // Lancia proc_top.py al massimo ogni 3 s. Argv assoluti e fissi (niente PATH,
-  // niente shell, unico argomento intero clampato): nessuna injection possibile.
+  // Lancia proc_top.py al massimo ogni 3 s. Solo valori allowlist in argv
+  // (intero clampato, sort ram/cpu validato, flag --group per presenza):
+  // la stringa grezza del setting non tocca mai argv. Niente PATH, niente shell.
   function refreshProcTop() {
-    if (!active || !procPanelOpen || procTopProcess.running) return
+    if (_destroyed || !active || !procPanelOpen || procTopProcess.running) return
     var now = Date.now()
     if (_lastProcTopTry > 0 && now - _lastProcTopTry < 3000) return
     _lastProcTopTry = now
-    procTopProcess.command = ["/usr/bin/python3", procTopPath, "--top", String(topProcCount)]
+    var cmd = ["/usr/bin/python3", procTopPath, "--top", String(topProcCount), "--sort", topProcSort]
+    if (topProcGroup) cmd.push("--group")
+    procTopProcess.command = cmd
     procTopProcess.running = true
     procTopWatchdog.restart()
+  }
+
+  // Cambio sort/raggruppamento → refresh immediato (throttle azzerato).
+  // Le guardie in refreshProcTop restano valide: a pannello chiuso non parte.
+  onTopProcSortChanged: {
+    _lastProcTopTry = 0
+    refreshProcTop()
+  }
+  onTopProcGroupChanged: {
+    _lastProcTopTry = 0
+    refreshProcTop()
   }
 
   // ----------------------------------------------------------------- files
@@ -274,6 +301,7 @@ Item {
       id: probeOut
       waitForEnd: true
       onStreamFinished: {
+        if (root._destroyed) return
         root.probe = Model.parseProbe(text)
         // Sensor paths only become known here, so take the first real sample
         // once they land instead of waiting out a whole interval.
@@ -285,8 +313,9 @@ Item {
 
   Process {
     id: nvidiaProcess
-    stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.applyNvidia(text) }
+    stdout: StdioCollector { waitForEnd: true; onStreamFinished: { if (!root._destroyed) root.applyNvidia(text) } }
     stderr: StdioCollector { waitForEnd: true }
+    onExited: if (root._destroyed) return
   }
 
   // Worker top-processi: esecuzione diretta (mai sh -c), stdout limitato a una
@@ -298,10 +327,13 @@ Item {
       id: procTopOut
       waitForEnd: true
       onStreamFinished: {
+        if (root._destroyed) return
         procTopWatchdog.stop()
-        var list = Model.parseProcTop(text, 12)
+        var res = Model.parseProcTop(text, 12)
+        var list = res.rows
         if (list.length > 0 || String(text).indexOf('"procs"') !== -1) {
           root.topProcs = list
+          root.procGroupedBy = res.groupedBy
           root.procTopFailed = false
           root._lastProcTopOk = Date.now()
           var d = new Date(root._lastProcTopOk)
@@ -315,7 +347,10 @@ Item {
       }
     }
     stderr: StdioCollector { waitForEnd: true }
-    onExited: procTopWatchdog.stop()
+    onExited: {
+      if (root._destroyed) return
+      procTopWatchdog.stop()
+    }
   }
 
   // Watchdog kill-before-next-tick: 0.4 s di lettura interna << 2 s << 3 s di
@@ -326,9 +361,20 @@ Item {
     interval: 2000
     repeat: false
     onTriggered: {
+      if (root._destroyed) return
       if (procTopProcess.running) procTopProcess.running = false
       root.procTopFailed = true
     }
+  }
+
+  // Cleanup anti-teardown: ferma worker e watchdog e alza il veto, così
+  // nessun callback in volo tocca lo stato durante la finalizzazione (reload).
+  Component.onDestruction: {
+    _destroyed = true
+    procTopWatchdog.stop()
+    if (procTopProcess.running) procTopProcess.running = false
+    if (nvidiaProcess.running) nvidiaProcess.running = false
+    if (probeProcess.running) probeProcess.running = false
   }
 
   // -------------------------------------------------------------- lifetime
