@@ -4,8 +4,10 @@ Memory, CPU, and GPU in the bar, with a first-class visual system panel popup. F
 
 ![The system panel, anchored under the bar readout](preview.png)
 
-Everything is read straight from `/proc` and `/sys` inside the shell process —
-no polling script, no subprocess on a timer.
+Bar sampling reads `/proc` and `/sys` inside the shell process via `FileView` —
+no polling script on a timer for that. Two documented helpers do fork: `nvidia-smi`
+on the sample interval (NVIDIA cards only — they expose no sysfs telemetry) and
+`proc_top.py` up to every 3 s, but only while the system panel is open.
 
 ## Install
 
@@ -81,10 +83,11 @@ polled through `nvidia-smi` on the same interval.
 Sensor paths are found once, at load, by [`hw-probe`](hw-probe) — a small shell
 script, because working out *which* files a machine exposes means globbing
 `hwmon` and matching labels, and every vendor names its sensors differently.
-After that there is no forking on a timer the way a Waybar custom module does:
-the widget reads the resolved files directly with `FileView`, which is what
-makes a two-second interval reasonable for something that runs for the life of
-your session.
+After that the resolved sysfs/`/proc` paths need no fork on a timer the way a
+Waybar custom module does: the widget reads them directly with `FileView`, which
+is what makes a two-second interval reasonable for something that runs for the
+life of your session. The documented exceptions are `nvidia-smi` (NVIDIA cards)
+and `proc_top.py` (open panel only).
 
 `blockAllReads` is set on those views deliberately. Without it `reload()` is
 asynchronous and `text()` returns the *previous* tick's contents, so every
@@ -144,7 +147,7 @@ omarchy bar set meviusisback.hw-monitor fahrenheit true --json
 | `tempFormat` | string | `"degree-unit"` | `"degree-unit"` (`45°C`), `"degree"` (`45°`), `"unit"` (`45C`), `"unit-lower"` (`45c`), or `"bare"` (`45`). |
 | `fahrenheit` | bool | `false` | Temperatures in °F instead of °C. |
 | `percentPad` | string | `"none"` | `"none"`, `"zero"`, `"lead"`, or `"trail"`. |
-| `showGauges` | bool | `false` | Show vertical capsule gauges. |
+| `showGauges` | bool | mode-dependent | Show vertical capsule gauges. Manifest default `true`; entries without the key fall back to on in `compact`/`full`, off in `icons`/`labels`. |
 | `showValues` | bool | `false` | Put percentages back on the row beside each gauge in `compact`/`full` modes. (`icons` and `labels` always show them). |
 | `showClocks` | bool | `false` | Show CPU and GPU clock speeds in GHz. |
 | `gpuIcon` | string | `"󰾲"` | Glyph marking the GPU figure. |
@@ -195,9 +198,12 @@ omarchy-shell meviusisback.hw-monitor status
 - A Nerd Font for the glyphs, which Omarchy already ships
 - `pciutils` (`lspci`) — optional, only to name the GPU card in the panel
 - `nvidia-smi` — only for NVIDIA cards, installed with the driver
+- `python3` (`/usr/bin/python3`) — only for the top-processes panel section; the section shows a fallback message when absent
 
-No pip packages, no daemon, no elevated privileges. The plugin reads `/proc`
-and `/sys` and nothing else.
+No pip packages, no daemon, no elevated privileges. Data sources: `/proc` and
+`/sys` via `FileView`, plus the optional helpers above — and `clickCommand`, which
+runs an arbitrary user-configured shell command on left click when set (empty by
+default, which opens the built-in panel instead).
 
 ## Removal
 

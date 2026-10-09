@@ -1,2 +1,5 @@
 # Scratch renders from screenshotting the widget
 *.tmp.png
+# Editor / OS junk
+*~
+.DS_Store

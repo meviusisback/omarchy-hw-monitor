@@ -4,12 +4,13 @@ import "Model.js" as Model
 
 // Samples CPU, memory, and GPU telemetry straight out of /proc and /sys.
 //
-// The only subprocess this service ever starts is `hw-probe`, once, to find
-// out which sysfs files this machine exposes (an NVIDIA card is the exception —
-// it has no sysfs telemetry, so it gets polled through nvidia-smi). Everything
-// else is a blocking read of a virtual file measured in microseconds, which is
-// why a bar widget can afford to do it on a two-second timer inside the shell
-// process instead of forking a script the way a Waybar module would.
+// Discovery runs `hw-probe` once to find out which sysfs files this machine
+// exposes. Steady-state bar sampling is blocking reads of virtual files
+// measured in microseconds — no fork on a timer, which is why a two-second
+// interval is affordable inside the shell process instead of forking a script
+// the way a Waybar module would. Two documented exceptions fork helpers:
+// `nvidia-smi` on the sample interval (NVIDIA cards expose no sysfs telemetry)
+// and `proc_top.py` up to every 3 s, only while the system panel is open.
 //
 // One instance exists per monitor, since the bar mounts a widget per screen.
 // The reads are cheap enough that this is not worth coordinating.
