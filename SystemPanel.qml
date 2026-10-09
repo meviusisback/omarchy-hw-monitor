@@ -130,7 +130,7 @@ KeyboardPanel {
 
   focusTarget: keyCatcher
   contentWidth: fittedContentWidth(Style.space(500))
-  contentHeight: fittedContentHeight(panelColumn.implicitHeight + Style.space(16), Style.space(960))
+  contentHeight: fittedContentHeight(panelColumn.implicitHeight + Style.space(16), Style.space(1100))
 
   PanelKeyCatcher {
     id: keyCatcher
@@ -1019,8 +1019,7 @@ KeyboardPanel {
                 text: {
                   var metric = hw.topProcSort === "cpu" ? "per CPU" : "per RAM"
                   if (hw.procTopTime === "") return metric
-                  var extra = (hw.topProcGroup && hw.procGroupedBy !== "none") ? (" \u00b7 " + hw.procGroupedBy) : ""
-                  return metric + " \u00b7 " + hw.procTopTime + extra
+                  return metric + " \u00b7 " + hw.procTopTime
                 }
                 color: Qt.darker(root.baseColor, 1.4)
                 font.family: root.fontFamily
@@ -1283,7 +1282,7 @@ KeyboardPanel {
       textFormat: Text.PlainText
       anchors.centerIn: parent
       text: chip.label
-      color: chip.selected ? Color.foreground : root.baseColor
+      color: chip.selected ? Qt.darker(chip.activeColor, 2.4) : root.baseColor
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
       font.bold: chip.selected
