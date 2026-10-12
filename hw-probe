@@ -167,6 +167,15 @@ for card in /sys/class/drm/card[0-9]*; do
   [[ -d $dev ]] || continue
 
   driver=$(sed -n 's/^DRIVER=//p' "$dev/uevent" 2>/dev/null | head -1)
+
+  # A headless Intel card is a render-offload dGPU that powers itself down
+  # when idle. Its hwmon reads wake it and restart the autosuspend timer, so
+  # sampling it every tick keeps it in D0 for good (~11 W on an Arc A370M).
+  if [[ $driver == i915 || $driver == xe ]]; then
+    connectors=("$card"-*)
+    [[ -e ${connectors[0]} ]] || continue
+  fi
+
   hw=""
   for candidate in "$dev"/hwmon/hwmon*; do
     [[ -d $candidate ]] && { hw=$candidate; break; }
