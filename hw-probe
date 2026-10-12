@@ -209,7 +209,9 @@ done
 # NVIDIA reports nothing useful through sysfs, so it gets sampled by polling
 # nvidia-smi instead. Declared last: a sysfs-capable card is always cheaper.
 if command -v nvidia-smi >/dev/null 2>&1; then
-  nv_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+  # With no NVIDIA card nvidia-smi fails but prints its error on stdout, which
+  # would otherwise be taken for a GPU name.
+  nv_name=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1) || nv_name=""
   if [[ -n $nv_name ]]; then
     nv="{$(printf '%s: %s, ' "$(json_str kind)" "$(json_str nvidia)")"
     nv+="$(printf '%s: %s, ' "$(json_str name)" "$(json_str "$(trim "$nv_name")")")"
