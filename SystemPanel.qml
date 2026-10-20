@@ -976,7 +976,7 @@ KeyboardPanel {
 
               Text {
                 textFormat: Text.PlainText
-                text: "Top processi"
+                text: "Top processes"
                 color: root.baseColor
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.bodySmall
@@ -1002,7 +1002,7 @@ KeyboardPanel {
 
               ModeChip {
                 id: groupChip
-                label: "Raggruppa"
+                label: "Group"
                 selected: hw.topProcGroup
                 anchors.verticalCenter: parent.verticalCenter
                 onPicked: root.persistSetting("topProcGroup", !hw.topProcGroup)
@@ -1017,7 +1017,7 @@ KeyboardPanel {
                 id: procTopStamp
                 textFormat: Text.PlainText
                 text: {
-                  var metric = hw.topProcSort === "cpu" ? "per CPU" : "per RAM"
+                  var metric = hw.topProcSort === "cpu" ? "by CPU" : "by RAM"
                   if (hw.procTopTime === "") return metric
                   return metric + " \u00b7 " + hw.procTopTime
                 }
@@ -1074,7 +1074,7 @@ KeyboardPanel {
                       textFormat: Text.PlainText
                       width: Math.max(40, parent.width - procRank.implicitWidth - procFigs.implicitWidth - parent.spacing * 2)
                       elide: Text.ElideRight
-                      text: modelData.count > 1 ? (modelData.name + "  \u00b7 " + modelData.count + " processi") : (modelData.name + "  (" + modelData.pid + ")")
+                      text: modelData.count > 1 ? (modelData.name + "  \u00b7 " + modelData.count + " processes") : (modelData.name + "  (" + modelData.pid + ")")
                       color: root.baseColor
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.bodySmall
@@ -1118,7 +1118,7 @@ KeyboardPanel {
               visible: hw.topProcs.length === 0
               width: parent.width
               wrapMode: Text.Wrap
-              text: hw.procTopFailed ? "Dati processi non disponibili (python3 assente o lettura fallita)." : "Raccolta dati processi\u2026"
+              text: hw.procTopFailed ? "Process data unavailable (python3 missing or read failed)." : "Collecting process data\u2026"
               color: Qt.darker(root.baseColor, 1.4)
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
