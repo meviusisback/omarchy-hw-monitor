@@ -12,14 +12,25 @@ Raggruppamento: identità systemd dal token più profondo (scope/service,
 contenitori come app-graphical.slice esclusi, pretty pulito); fallback per
 comm uguale; unione sep-prefix ("orca" assorbe "orca-ide"). Senza identità:
 singole o per-comm. Niente espansione figli.
+Senza --group i browser Chromium (brave/chrome/chromium/msedge/vivaldi) sono
+disambiguati: ruolo dal cmdline ([main], [gpu], [ext], [zygote]...) oppure
+dominio del tab letto dai segmenti anonimi di /proc/<pid>/mem (sola lettura,
+budget di byte/tempo). L'host è quello più frequente in memoria: un CDN molto
+usato può oscurare l'origin, quindi il dominio è un indizio, non una verità.
+Stato su disco: /run/user/<uid>/hw_monitor_browser_cache.json (0600, tmpfs,
+TTL 45 s / 10 s). Serve a non ripetere la scansione a ogni poll: se manca una
+runtime dir dell'utente il caching si disattiva, senza scrivere altrove.
 Errori: {} su stdout, una riga su stderr, exit 0 (refuse-softly).
 Solo stdlib, nessuna rete.
 """
 
 import json
+import math
 import os
 import re
+import stat
 import sys
+import tempfile
 import time
 
 TOP_DEFAULT = 6
@@ -252,56 +263,52 @@ def build_rows(snap_a, snap_b, sys_delta, mem_total, page_kib, group):
             "rssKib": rss_kib,
         })
 
-    grouped_by = "none"
-    if False:
-        rows = []
-    else:
-        identified = [p for p in per_pid if p["ident"]]
-        grouped_by = "scope" if identified else "comm"
-        # Secchi per chiave (identità systemd se c'è, altrimenti comm), poi
-        # unione sep-prefix: "orca" assorbe "orca-ide", senza falsi merge
-        # su estensioni alfanumeriche ("pi" non assorbe "pipewire").
-        buckets = {}
-        for p in per_pid:
-            label = p["ident"] if p["ident"] else p["comm"]
-            buckets.setdefault(merge_key(label), []).append((label, p))
-        canon = {}
-        for key in sorted(buckets, key=len):
-            target = None
-            for done in canon:
-                if mergeable(done, key):
-                    target = done
-                    break
-            if target is None:
-                target = key
-            buckets[target].extend(buckets[key] if target != key else [])
-            ident_labels = [lab for lab, m in buckets[target] if m["ident"]]
-            canon[target] = ident_labels[0] if ident_labels else buckets[target][0][0]
-        rows = []
-        for key, members in buckets.items():
-            if key not in canon:
-                continue
-            display = canon[key]
-            procs = [m for _lab, m in members]
-            if len(procs) == 1:
-                m = procs[0]
-                rows.append({
-                    "pid": m["pid"],
-                    "name": m["comm"],
-                    "count": 1,
-                    "cpu": round(m["cpu"], 1),
-                    "rssKib": int(m["rssKib"]),
-                    "memPct": 0.0,
-                })
-            else:
-                rows.append({
-                    "pid": max(procs, key=lambda m: m["rssKib"])["pid"],
-                    "name": display,
-                    "count": len(procs),
-                    "cpu": round(sum(m["cpu"] for m in procs), 1),
-                    "rssKib": int(sum(m["rssKib"] for m in procs)),
-                    "memPct": 0.0,
-                })
+    identified = [p for p in per_pid if p["ident"]]
+    grouped_by = "scope" if identified else "comm"
+    # Secchi per chiave (identità systemd se c'è, altrimenti comm), poi
+    # unione sep-prefix: "orca" assorbe "orca-ide", senza falsi merge
+    # su estensioni alfanumeriche ("pi" non assorbe "pipewire").
+    buckets = {}
+    for p in per_pid:
+        label = p["ident"] if p["ident"] else p["comm"]
+        buckets.setdefault(merge_key(label), []).append((label, p))
+    canon = {}
+    for key in sorted(buckets, key=len):
+        target = None
+        for done in canon:
+            if mergeable(done, key):
+                target = done
+                break
+        if target is None:
+            target = key
+        buckets[target].extend(buckets[key] if target != key else [])
+        ident_labels = [lab for lab, m in buckets[target] if m["ident"]]
+        canon[target] = ident_labels[0] if ident_labels else buckets[target][0][0]
+    rows = []
+    for key, members in buckets.items():
+        if key not in canon:
+            continue
+        display = canon[key]
+        procs = [m for _lab, m in members]
+        if len(procs) == 1:
+            m = procs[0]
+            rows.append({
+                "pid": m["pid"],
+                "name": m["comm"],
+                "count": 1,
+                "cpu": round(m["cpu"], 1),
+                "rssKib": int(m["rssKib"]),
+                "memPct": 0.0,
+            })
+        else:
+            rows.append({
+                "pid": max(procs, key=lambda m: m["rssKib"])["pid"],
+                "name": display,
+                "count": len(procs),
+                "cpu": round(sum(m["cpu"] for m in procs), 1),
+                "rssKib": int(sum(m["rssKib"] for m in procs)),
+                "memPct": 0.0,
+            })
 
     for r in rows:
         r["cpu"] = max(0.0, min(100.0, r["cpu"]))
@@ -313,9 +320,20 @@ def build_rows(snap_a, snap_b, sys_delta, mem_total, page_kib, group):
 BROWSER_COMMS = ("brave", "chrome", "chromium", "msedge", "vivaldi")
 BROWSER_CACHE_TTL_RESOLVED = 45.0
 BROWSER_CACHE_TTL_EMPTY = 10.0
+CACHE_NAME = "hw_monitor_browser_cache.json"
+CACHE_VERSION = 2
+CACHE_MAX_BYTES = 256 * 1024
 SNAP_CACHE_MAX_AGE = 10.0
+# Limiti della scansione di memoria: senza budget una singola mappatura
+# sfortunata legge centinaia di MB dentro un watchdog da 2 s.
+MEM_SCAN_MAX_BYTES = 8 * 1024 * 1024
+MEM_SCAN_CHUNK = 512 * 1024
+MEM_SCAN_MAX_REGIONS = 400
+MEM_SCAN_BUDGET_S = 0.6
 
+# Solo l'host: la path non discrimina (pesarla peggiorava le etichette reali).
 URL_HOST_RE = re.compile(rb"https?://([a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+)")
+CMD_TYPE_RE = re.compile(r"--type=([a-zA-Z][a-zA-Z0-9-]*)")
 APP_URL_RE = re.compile(r"--app=(?:https?://)?([a-zA-Z0-9.-]+)")
 APP_ID_RE = re.compile(r"--app-id=([a-zA-Z0-9]+)")
 UTIL_SUB_RE = re.compile(r"--utility-sub-type=([a-zA-Z0-9_.]+)")
@@ -326,12 +344,11 @@ IGNORE_BROWSER_HOSTS = {
     "ajax.googleapis.com", "www.google.com", "apis.google.com", "accounts.google.com",
     "ssl.gstatic.com", "www.gstatic.com", "clients2.google.com", "chrome.google.com",
     "chromewebstore.google.com", "brave.com", "variations.brave.com", "static.cloudflareinsights.com",
-    "cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com", "fontawesome.com", "github.com",
+    "cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com", "fontawesome.com",
     "raw.githubusercontent.com", "avatars.githubusercontent.com", "localhost", "127.0.0.1",
     "webawesome.com", "buy.paddle.com", "cdn.paddle.com", "clearcache.io", "darkreader.org",
-    "bitbucket.org", "browser-intake-us5-datadoghq.com", "accountcapabilities-pa.googleapis.com",
-    "capitalone.com", "www.capitalone.com", "api.anthropic.com", "claude.ai", "drive.google.com",
-    "docs.google.com", "i.ytimg.com", "yt3.ggpht.com", "s.ytimg.com",
+    "browser-intake-us5-datadoghq.com", "accountcapabilities-pa.googleapis.com",
+    "api.anthropic.com", "i.ytimg.com", "yt3.ggpht.com", "s.ytimg.com",
     "ic3.teams.office.com", "local.teams.office.com", "api.flightproxy.teams.microsoft.com",
     "api.spaces.skype.com", "schema.skype.com", "graph.microsoft.com", "substrate.office.com",
 }
@@ -348,41 +365,141 @@ IGNORE_BROWSER_SUFFIXES = (
 )
 
 
-def _browser_cache_path():
+def _runtime_dir():
+    """Directory di stato: solo la runtime dir dell'utente, mai /tmp.
+
+    /tmp è scrivibile da chiunque: un nome prevedibile lì è una primitiva di
+    sovrascrittura file via symlink (il temp file veniva aperto seguendo i
+    link). Senza una runtime dir nostra il caching si disattiva — nessun
+    degrado funzionale, solo un poll più lento.
+    """
     uid = os.getuid()
-    run_dir = "/run/user/%d" % uid
-    if os.path.isdir(run_dir) and os.access(run_dir, os.W_OK):
-        return "%s/hw_monitor_browser_cache.json" % run_dir
-    return "/tmp/hw_monitor_browser_cache_%d.json" % uid
+    for cand in (os.environ.get("XDG_RUNTIME_DIR"), "/run/user/%d" % uid):
+        if not cand or not os.path.isabs(cand):
+            continue
+        try:
+            info = os.lstat(cand)
+        except OSError:
+            continue
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != uid:
+            continue
+        # Una dir scrivibile da gruppo/altri non è un posto sicuro per lo stato.
+        if info.st_mode & 0o022:
+            continue
+        if not os.access(cand, os.W_OK | os.X_OK):
+            continue
+        return cand
+    return ""
+
+
+def _browser_cache_path():
+    base = _runtime_dir()
+    return os.path.join(base, CACHE_NAME) if base else ""
+
+
+def _as_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value, default=-1e9):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    # NaN/Infinity sopravvivono a JSON e non scadrebbero mai.
+    return number if math.isfinite(number) else default
+
+
+CACHE_KEY_RE = re.compile(r"^[1-9][0-9]*:[1-9][0-9]*$")
+
+
+def _clean_cache(data):
+    """Riporta la cache a una forma tipizzata, scartando il resto.
+
+    Il file è stato esterno e mutabile: un campo col tipo sbagliato non deve
+    poter rompere il collector (né lasciarlo rotto per sempre).
+    """
+    clean: dict = {"_v": CACHE_VERSION}
+    snap = data.get("_snap")
+    if isinstance(snap, dict) and isinstance(snap.get("cpus"), dict):
+        def pids(mapping):
+            out = {}
+            for key, value in mapping.items():
+                pid = _as_int(key)
+                if pid > 0:
+                    out[str(pid)] = max(0, _as_int(value))
+            return out
+        prev_cpus = snap.get("prev_cpus")
+        clean["_snap"] = {
+            "ts": _as_float(snap.get("ts")),
+            "sys": max(0, _as_int(snap.get("sys"))),
+            "prev_sys": max(0, _as_int(snap.get("prev_sys"))),
+            "cpus": pids(snap["cpus"]),
+            "prev_cpus": pids(prev_cpus) if isinstance(prev_cpus, dict) else {},
+        }
+    for key, entry in data.items():
+        if not isinstance(key, str) or not CACHE_KEY_RE.match(key):
+            continue
+        if not isinstance(entry, dict):
+            continue
+        label = entry.get("label")
+        if not isinstance(label, str):
+            continue
+        label = sanitize_name(label)
+        if not label.strip("?· "):
+            continue
+        clean[key] = {"label": label,
+                      "ts": _as_float(entry.get("ts")),
+                      "resolved": entry.get("resolved") is True}
+    return clean
 
 
 def _load_browser_cache():
     path = _browser_cache_path()
+    if not path:
+        return {}
     try:
+        info = os.lstat(path)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid():
+            return {}
+        if info.st_size > CACHE_MAX_BYTES:
+            return {}
         with open(path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
-        if isinstance(data, dict):
-            return data
-    except (OSError, ValueError):
-        pass
-    return {}
+        if not isinstance(data, dict) or data.get("_v") != CACHE_VERSION:
+            return {}
+        return _clean_cache(data)
+    except Exception:
+        # JSON profondamente annidato alza RecursionError, non ValueError: qui
+        # si scarta il file (nostro, verificato sopra) così il prossimo poll
+        # riparte pulito invece di restare vuoto per sempre.
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+        return {}
 
 
 def _save_browser_cache(cache, live_pids=None, now=None):
     if now is None:
         now = time.time()
-    pruned = {}
+    path = _browser_cache_path()
+    if not path:
+        return
+    pruned = {"_v": CACHE_VERSION}
     for k, v in cache.items():
-        if k == "_dirty":
+        if k == "_v":
             continue
         if k.startswith("_"):
             pruned[k] = v
             continue
         if not isinstance(v, dict):
             continue
-        try:
-            pid = int(k.split(":", 1)[0])
-        except (ValueError, IndexError):
+        pid = _as_int(k.split(":", 1)[0])
+        if pid <= 0:
             continue
         if live_pids is not None:
             if pid not in live_pids:
@@ -392,35 +509,150 @@ def _save_browser_cache(cache, live_pids=None, now=None):
         ttl = (BROWSER_CACHE_TTL_RESOLVED
                if v.get("resolved")
                else BROWSER_CACHE_TTL_EMPTY)
-        if now - float(v.get("ts", 0.0)) < ttl:
+        if now - _as_float(v.get("ts")) < ttl:
             pruned[k] = v
-    path = _browser_cache_path()
-    tmp_path = "%s.%d.tmp" % (path, os.getpid())
+    # mkstemp: O_EXCL + 0600 + nome non prevedibile, e nessun symlink seguito.
+    tmp_path = ""
+    tmp_fd = None
     try:
-        with open(tmp_path, "w", encoding="utf-8") as fh:
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(path),
+                                            prefix=".hw_monitor_cache.",
+                                            suffix=".tmp")
+        with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+            tmp_fd = None
             json.dump(pruned, fh, ensure_ascii=True)
         os.replace(tmp_path, path)
-    except OSError:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
+        tmp_path = ""
+    except (OSError, TypeError, ValueError):
+        pass
+    finally:
+        if tmp_fd is not None:
+            try:
+                os.close(tmp_fd)
+            except OSError:
+                pass
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
 
 
 def _pid_starttime(pid):
     try:
         with open("/proc/%d/stat" % pid, "rb") as fh:
-            stat = fh.read(512)
-        rp = stat.rfind(b")")
+            info = fh.read(1024)
+        rp = info.rfind(b")")
         if rp != -1:
-            return int(stat[rp + 2:].split(None, 20)[19])
+            return int(info[rp + 2:].split(None, 20)[19])
     except (OSError, ValueError, IndexError):
         pass
     return 0
 
 
-def enrich_browser_label(pid, comm, cache=None, now=None):
-    if comm.lower() not in BROWSER_COMMS:
+def _fit_label(comm, tag):
+    """`comm [tag]` entro NAME_MAX, accorciando il tag: la parentesi chiude."""
+    room = NAME_MAX - len(comm) - 3
+    if room < 3:
+        return sanitize_name(comm)
+    return sanitize_name("%s [%s]" % (comm, tag[:room]))
+
+
+# Nessun accesso a /proc/<pid>/mem (yama ptrace_scope, altro utente): una
+# volta accertato, inutile riprovare per ogni renderer dello stesso poll.
+_MEM_SCAN_DENIED = [False]
+
+
+def _scan_hosts(pid, deadline):
+    """Host più frequente nella memoria del renderer, e se la scansione è finita.
+
+    Contare gli URL avvantaggia i CDN, e pesare le "path da pagina" (provato)
+    peggiora sul campo: i beacon pubblicitari hanno path corte e vincono. Con
+    i dati reali il conteggio semplice resta il male minore; il limite noto è
+    che un host di subrisorse molto usato può oscurare l'origin del tab.
+    Budget su byte, regioni e tempo: il watchdog del chiamante è a 2 s.
+    `complete=False` = campione troncato: il chiamante non lo cache come certo.
+    """
+    counts = {}
+    complete = True
+    try:
+        mem = open("/proc/%d/mem" % pid, "rb", 0)
+    except PermissionError:
+        _MEM_SCAN_DENIED[0] = True
+        return counts, False
+    except OSError:
+        return counts, False
+    try:
+        with open("/proc/%d/maps" % pid, "r", encoding="utf-8", errors="ignore") as maps:
+            scanned = 0
+            regions = 0
+            failures = 0
+            for line in maps:
+                if deadline is not None and time.monotonic() > deadline:
+                    complete = False
+                    break
+                parts = line.split()
+                if len(parts) < 2 or "r" not in parts[1]:
+                    continue
+                if len(parts) >= 6 and parts[5].startswith((
+                    "/opt/", "/usr/", "/lib", "/dev/", "/home/", "/var/", "/run/", "/etc/"
+                )):
+                    continue
+                addr = parts[0].split("-")
+                if len(addr) != 2:
+                    continue
+                try:
+                    start, end = int(addr[0], 16), int(addr[1], 16)
+                except ValueError:
+                    continue
+                size = end - start
+                if size < 65536 or size > 32 * 1024 * 1024:
+                    continue
+                regions += 1
+                if regions > MEM_SCAN_MAX_REGIONS:
+                    complete = False
+                    break
+                try:
+                    mem.seek(start)
+                    chunk = mem.read(min(size, MEM_SCAN_CHUNK))
+                except PermissionError:
+                    _MEM_SCAN_DENIED[0] = True
+                    complete = False
+                    break
+                except OSError:
+                    # Una regione sparita/illeggibile non invalida le altre.
+                    failures += 1
+                    if failures > 3:
+                        complete = False
+                        break
+                    continue
+                scanned += len(chunk)
+                for raw_host in URL_HOST_RE.findall(chunk):
+                    host = raw_host.decode("ascii", "ignore").lower()
+                    if host in IGNORE_BROWSER_HOSTS or host.endswith(IGNORE_BROWSER_SUFFIXES):
+                        continue
+                    counts[host] = counts.get(host, 0) + 1
+                if scanned >= MEM_SCAN_MAX_BYTES:
+                    complete = False
+                    break
+    except OSError:
+        complete = False
+    finally:
+        try:
+            mem.close()
+        except OSError:
+            pass
+    return counts, complete
+
+
+def _is_browser(comm):
+    """`brave` ma anche `brave-browser` (nome del binario su alcune distro)."""
+    base = comm.lower()
+    return base in BROWSER_COMMS or base.split("-", 1)[0] in BROWSER_COMMS
+
+
+def enrich_browser_label(pid, comm, cache=None, now=None, deadline=None):
+    if not _is_browser(comm):
         return comm
     if now is None:
         now = time.time()
@@ -436,8 +668,11 @@ def enrich_browser_label(pid, comm, cache=None, now=None):
             ttl = (BROWSER_CACHE_TTL_RESOLVED
                    if entry.get("resolved")
                    else BROWSER_CACHE_TTL_EMPTY)
-            if now - float(entry.get("ts", 0.0)) < ttl:
-                return entry.get("label", comm)
+            if now - _as_float(entry.get("ts")) < ttl:
+                # Sanificata anche in lettura: il file non è input fidato.
+                label = entry.get("label")
+                if isinstance(label, str) and label:
+                    return sanitize_name(label)
 
     try:
         with open("/proc/%d/cmdline" % pid, "rb") as fh:
@@ -452,72 +687,43 @@ def enrich_browser_label(pid, comm, cache=None, now=None):
     if app_match:
         host = app_match.group(1).strip(".").lower()
         if host:
-            label = sanitize_name("%s [%s]" % (comm, host))
+            label = _fit_label(comm, host)
 
     if label is None:
+        ctype = CMD_TYPE_RE.search(cmdline)
+        ctype = ctype.group(1).lower() if ctype else ""
         if "--extension-process" in cmdline:
-            label = sanitize_name("%s [ext]" % comm)
-        elif "--type=gpu-process" in cmdline:
-            label = sanitize_name("%s [gpu]" % comm)
-        elif "--type=utility" in cmdline:
+            label = _fit_label(comm, "ext")
+        elif ctype == "gpu-process":
+            label = _fit_label(comm, "gpu")
+        elif ctype == "utility":
             m = UTIL_SUB_RE.search(cmdline)
             sub = m.group(1).split(".")[-1].replace("Service", "").lower() if m else "util"
-            label = sanitize_name("%s [%s]" % (comm, sub))
-        elif "--type=renderer" not in cmdline:
-            if APP_ID_RE.search(cmdline):
-                label = sanitize_name("%s [app]" % comm)
-            else:
-                label = sanitize_name("%s [main]" % comm)
+            label = _fit_label(comm, sub or "util")
+        elif not ctype:
+            # Nessun --type=: è il processo browser principale (o una PWA).
+            label = _fit_label(comm, "app" if APP_ID_RE.search(cmdline) else "main")
+        elif not ctype.startswith("renderer"):
+            # zygote, crashpad-handler, ppapi...: ruolo esplicito, non "[main]".
+            label = _fit_label(comm, ctype)
 
     if label is None:
-        counts = {}
-        try:
-            with open("/proc/%d/maps" % pid, "r", encoding="utf-8", errors="ignore") as mf, \
-                 open("/proc/%d/mem" % pid, "rb", 0) as mem:
-                scanned = 0
-                for line in mf:
-                    parts = line.split()
-                    if len(parts) < 2 or "r" not in parts[1]:
-                        continue
-                    if len(parts) >= 6 and parts[5].startswith((
-                        "/opt/", "/usr/", "/lib", "/dev/", "/home/", "/var/", "/run/", "/etc/"
-                    )):
-                        continue
-                    addr = parts[0].split("-")
-                    if len(addr) != 2:
-                        continue
-                    start, end = int(addr[0], 16), int(addr[1], 16)
-                    size = end - start
-                    if size < 65536 or size > 32 * 1024 * 1024:
-                        continue
-                    try:
-                        mem.seek(start)
-                        chunk = mem.read(min(size, 512 * 1024))
-                        scanned += len(chunk)
-                        for m in URL_HOST_RE.findall(chunk):
-                            h = m.decode("ascii", "ignore").lower()
-                            if h not in IGNORE_BROWSER_HOSTS and not h.endswith(IGNORE_BROWSER_SUFFIXES):
-                                counts[h] = counts.get(h, 0) + 1
-                        if scanned > 16 * 1024 * 1024 and counts and max(counts.values()) >= 25:
-                            break
-                    except OSError:
-                        pass
-        except OSError:
-            pass
-        if counts:
-            top_host = max(counts.items(), key=lambda kv: kv[1])[0]
-            label = sanitize_name("%s [%s]" % (comm, top_host))
-            resolved = True
+        if _MEM_SCAN_DENIED[0]:
+            label, resolved = _fit_label(comm, "tab"), False
         else:
-            label = sanitize_name("%s [tab]" % comm)
-            resolved = False
+            counts, complete = _scan_hosts(pid, deadline)
+            if not counts:
+                label, resolved = _fit_label(comm, "tab"), False
+            else:
+                top_host = max(counts, key=lambda h: counts[h])
+                label = _fit_label(comm, top_host)
+                # Campione troncato: etichetta usata, ma con TTL corto.
+                resolved = complete
 
     if cache_key:
         cache[cache_key] = {"label": label, "ts": now, "resolved": resolved}
         if own_cache:
             _save_browser_cache(cache, now=now)
-        else:
-            cache["_dirty"] = True
     return label
 
 
@@ -525,7 +731,6 @@ def main(argv):
     top_n = TOP_DEFAULT
     sort = "ram"
     group = False
-    positional = []
     i = 1
     while i < len(argv):
         if argv[i] == "--top" and i + 1 < len(argv):
@@ -542,15 +747,9 @@ def main(argv):
             group = True
             i += 1
         else:
-            positional.append(argv[i])
+            # Solo i flag sopra: argv arriva già allowlistato dal chiamante e
+            # ogni altro token è rumore, non un secondo canale di configurazione.
             i += 1
-    if positional:
-        try:
-            top_n = int(positional[0])
-        except ValueError:
-            pass
-        if len(positional) >= 3:
-            group = positional[2].strip().lower() in ("1", "true", "yes")
     top_n = max(TOP_MIN, min(TOP_MAX, top_n))
 
     try:
@@ -561,31 +760,33 @@ def main(argv):
 
     cache = _load_browser_cache()
     now = time.time()
-    req_key = "%d:%s:%d" % (top_n, sort, 1 if group else 0)
-    last_res = cache.get("_last")
-    if isinstance(last_res, dict) and last_res.get("key") == req_key:
-        if 0.0 <= now - float(last_res.get("ts", 0.0)) < 1.0 and "out" in last_res:
-            sys.stdout.write(last_res["out"])
-            return
+    _MEM_SCAN_DENIED[0] = False
     prev_snap = cache.get("_snap")
     used_cached_snap = False
 
     if isinstance(prev_snap, dict):
-        snap_age = now - float(prev_snap.get("ts", 0.0))
+        snap_age = now - _as_float(prev_snap.get("ts"))
         if 0.0 <= snap_age <= SNAP_CACHE_MAX_AGE:
             sys_b = read_sys_total()
             snap_b = snapshot_pids(group)
-            prev_sys = int(prev_snap.get("sys", 0))
-            prev_cpus = prev_snap.get("cpus", {})
-            if sys_b - prev_sys < 5 and prev_snap.get("prev_sys"):
-                base_sys = int(prev_snap["prev_sys"])
-                base_cpus = prev_snap.get("prev_cpus", prev_cpus)
+            prev_sys = _as_int(prev_snap.get("sys"))
+            prev_cpus = prev_snap.get("cpus") or {}
+            prev_base_sys = _as_int(prev_snap.get("prev_sys"))
+            prev_base_cpus = prev_snap.get("prev_cpus") or {}
+            if sys_b - prev_sys < 5 and prev_base_sys and prev_base_cpus:
+                base_sys = prev_base_sys
+                base_cpus = prev_base_cpus
             else:
                 base_sys = prev_sys
                 base_cpus = prev_cpus
-            if sys_b >= base_sys and isinstance(base_cpus, dict) and base_cpus:
+            if sys_b >= base_sys > 0 and isinstance(base_cpus, dict) and base_cpus:
                 sys_delta = sys_b - base_sys
-                snap_a = {int(k): (int(v), 0, "", 0, "") for k, v in base_cpus.items()}
+                snap_a = {_as_int(k): (_as_int(v), 0, "", 0, "")
+                          for k, v in base_cpus.items()}
+                # Pid nati dopo la baseline: 0% invece di sparire dal panel.
+                for pid, values in snap_b.items():
+                    if pid not in snap_a:
+                        snap_a[pid] = (values[0], 0, "", 0, "")
                 if snap_age >= 1.5:
                     cache["_snap"] = {
                         "ts": now,
@@ -594,7 +795,6 @@ def main(argv):
                         "prev_sys": base_sys,
                         "prev_cpus": base_cpus,
                     }
-                    cache["_dirty"] = True
                 used_cached_snap = True
 
     if not used_cached_snap:
@@ -605,6 +805,10 @@ def main(argv):
         sys_b = read_sys_total()
         snap_b = snapshot_pids(group)
         sys_delta = sys_b - sys_a
+        # Stessa regola del ramo in cache: un processo appena nato compare a 0%.
+        for pid, values in snap_b.items():
+            if pid not in snap_a:
+                snap_a[pid] = (values[0], 0, "", 0, "")
         cache["_snap"] = {
             "ts": now,
             "sys": sys_b,
@@ -612,7 +816,6 @@ def main(argv):
             "prev_sys": sys_a,
             "prev_cpus": {str(pid): vals[0] for pid, vals in snap_a.items()},
         }
-        cache["_dirty"] = True
 
     rows, grouped_by = build_rows(snap_a, snap_b, sys_delta, mem_total,
                                   page_kib, group)
@@ -620,17 +823,19 @@ def main(argv):
     rows.sort(key=key, reverse=True)
     top_rows = rows[:top_n]
     if not group:
+        deadline = time.monotonic() + MEM_SCAN_BUDGET_S
         for r in top_rows:
             r["name"] = sanitize_name(r["name"])
             if r.get("count", 1) == 1:
                 r["name"] = enrich_browser_label(r["pid"], r["name"],
-                                                 cache=cache, now=now)
+                                                 cache=cache, now=now,
+                                                 deadline=deadline)
     out_str = json.dumps({"groupedBy": grouped_by,
                           "procs": top_rows},
                          ensure_ascii=True) + "\n"
-    cache["_last"] = {"key": req_key, "ts": now, "out": out_str}
-    _save_browser_cache(cache, live_pids=set(snap_b.keys()), now=now)
+    # Prima l'output, poi lo stato: un guaio nella cache non deve azzerare il panel.
     sys.stdout.write(out_str)
+    _save_browser_cache(cache, live_pids=set(snap_b.keys()), now=now)
 
 
 if __name__ == "__main__":

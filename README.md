@@ -40,7 +40,7 @@ Clicking the widget opens an Omarchy keyboard-driven popup panel anchored to the
 - **60s CPU load sparkline** — live history trend buffer sampled while open (zero background cost when closed).
 - **Processor details** — full CPU model name (without cutoff), load, clock frequency, dynamic temperature color, and 1m/5m/15m load average meters.
 - **Memory breakdown** — used/total GiB visual meter, available, cache, and swap usage.
-- **Top processes** — the top processes sorted by RAM or CPU (switch in the header), with share and CPU% per process, blue ramp bars toward the theme accent. The Group toggle collapses them per application (systemd scope, name fallback) with counts and sums. Sampled only while the panel is open (zero cost while closed).
+- **Top processes** — the top processes sorted by RAM or CPU (switch in the header), with share and CPU% per process, blue ramp bars toward the theme accent. The Group toggle collapses them per application (systemd scope, name fallback) with counts and sums. With grouping off, Chromium-family browsers are disambiguated by role (`[main]`, `[gpu]`, `[ext]`, `[zygote]`…) or by the tab's domain (`brave [mail.google.com]`), read as a hint from the renderer's memory — a busy CDN can hide the origin, a page can influence what it reports, and Firefox tabs stay plain. Sampled only while the panel is open (zero cost while closed).
 - **Graphics metrics** — full GPU card name, load, dynamic temperature color, VRAM meter, power draw (W), fan RPM, and clock speeds.
 - **Keyboard navigation** — `Escape` to close, `Tab`/`Shift+Tab` to switch panels, `r` to resample, `c`/`f` to toggle °C/°F.
 
@@ -77,6 +77,13 @@ label welded to its figure, ~230px.
 
 An NVIDIA card is the exception: it reports none of this through sysfs, so it is
 polled through `nvidia-smi` on the same interval.
+
+`proc_top.py` keeps one small state file in the run directory:
+`/run/user/<uid>/hw_monitor_browser_cache.json` (0600, tmpfs, cleared on
+logout). It holds the resolved browser labels and the previous CPU snapshot, so
+a poll costs 20–40 ms instead of re-scanning `/proc` twice; entries expire
+after 45 s (10 s for a tab it could not name). Without a writable runtime
+directory the cache is skipped rather than written elsewhere.
 
 ## How it samples
 
@@ -215,7 +222,9 @@ omarchy plugin remove meviusisback.hw-monitor
 
 That drops it from the bar and deletes the plugin. Per-widget settings live in
 the shell's own config (`~/.config/omarchy/shell.json`) and are left for the
-shell to prune — remove the widget's entry there if you want a clean slate.
+shell to prune — remove the widget's entry there if you want a clean slate. The
+process-list cache at `/run/user/<uid>/hw_monitor_browser_cache.json` is tmpfs
+and disappears at logout; delete it by hand if you want it gone sooner.
 
 ## License
 
