@@ -570,6 +570,7 @@ Panel {
     showTopProcs: root.showTopProcs
     showClocks: root.showClocks
     showGauges: root.showGauges
+    itemOrder: root.itemOrder
     ramFormat: root.ramFormat
     tempFormat: root.tempFormat
     fahrenheit: root.fahrenheit
