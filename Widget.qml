@@ -376,6 +376,21 @@ Panel {
     return out
   }
 
+  // `cells` is a new array on every sample, and a Repeater handed a new array
+  // destroys and rebuilds every cell, which also makes the bar re-measure
+  // itself. The Repeaters get the key list instead, a new array only when a
+  // cell appears or goes, and each cell reads its current values by key.
+  readonly property string cellKeyList: cells.map(function(c) { return c.key }).join(",")
+  readonly property var cellKeys: cellKeyList ? cellKeyList.split(",") : []
+
+  function cellFor(key) {
+    for (var i = 0; i < cells.length; i++)
+      if (cells[i].key === key) return cells[i]
+    // A cell just switched off can read once more before its delegate goes.
+    return { key: key, label: "", icon: "", iconRotation: 0, value: "", pad: "", slotted: false,
+             temp: "", tempC: -1, clock: "", ratio: 0, severity: 0 }
+  }
+
   // ---------------------------------------------------------------- tooltip
 
   readonly property string monitorName: {
@@ -536,7 +551,7 @@ Panel {
       spacing: Style.space(root.mode === "icons" ? 14 : 8)
 
       Repeater {
-        model: root.cells
+        model: root.vertical ? [] : root.cellKeys
         delegate: cell
       }
     }
@@ -548,7 +563,7 @@ Panel {
       spacing: Style.space(5)
 
       Repeater {
-        model: root.cells
+        model: root.vertical ? root.cellKeys : []
         delegate: cell
       }
     }
@@ -586,6 +601,7 @@ Panel {
     Row {
       id: group
       required property var modelData
+      readonly property var cellData: root.cellFor(modelData)
       spacing: Style.space(4)
 
       // Every figure cell reserves its slot width: a single-digit value keeps
@@ -594,22 +610,22 @@ Panel {
       // last cell too, so the bar never re-lays itself out when the final
       // reading gains or loses a digit.
       readonly property int figureSlot: group.isTempCell ? root.tempSlot
-        : (modelData.key === "ram" ? root.ramSlot : root.percentSlot)
+        : (group.cellData.key === "ram" ? root.ramSlot : root.percentSlot)
       readonly property real slack: root.showValues
         ? Math.max(0, group.figureSlot - valueText.implicitWidth - spacing)
         : 0
 
-      readonly property bool isTempCell: modelData.key === "cpu-temp" || modelData.key === "gpu-temp"
+      readonly property bool isTempCell: group.cellData.key === "cpu-temp" || group.cellData.key === "gpu-temp"
 
       TextMetrics {
         id: glyphMetrics
         font.family: root.fontFamily
         font.pixelSize: root.iconSize
-        text: modelData.icon
+        text: group.cellData.icon
       }
 
       Item {
-        readonly property bool turned: Math.abs(modelData.iconRotation % 180) === 90
+        readonly property bool turned: Math.abs(group.cellData.iconRotation % 180) === 90
         readonly property real inkWidth: turned
           ? glyphMetrics.tightBoundingRect.height
           : glyphMetrics.tightBoundingRect.width
@@ -620,25 +636,25 @@ Panel {
 
         OpticalGlyph {
           anchors.fill: parent
-          visible: modelData.iconRotation === 0
-          text: modelData.icon
+          visible: group.cellData.iconRotation === 0
+          text: group.cellData.icon
           fontFamily: root.fontFamily
           fontSize: root.iconSize
           color: group.isTempCell
-            ? root.tempColor(modelData.tempC)
-            : root.warm(root.base, modelData.severity)
+            ? root.tempColor(group.cellData.tempC)
+            : root.warm(root.base, group.cellData.severity)
           Behavior on color { ColorAnimation { duration: 240 } }
         }
 
         Text {
           anchors.centerIn: parent
-          visible: modelData.iconRotation !== 0
-          rotation: modelData.iconRotation
+          visible: group.cellData.iconRotation !== 0
+          rotation: group.cellData.iconRotation
           textFormat: Text.PlainText
-          text: modelData.icon
+          text: group.cellData.icon
           color: group.isTempCell
-            ? root.tempColor(modelData.tempC)
-            : root.warm(root.base, modelData.severity)
+            ? root.tempColor(group.cellData.tempC)
+            : root.warm(root.base, group.cellData.severity)
           font.family: root.fontFamily
           font.pixelSize: root.iconSize
           renderType: Text.NativeRendering
@@ -651,17 +667,17 @@ Panel {
         height: root.contentHeight
         bodyWidth: root.gaugeWidth
         bodyHeight: root.gaugeHeight
-        ratio: modelData.ratio
-        fillColor: group.isTempCell ? root.tempColor(modelData.tempC) : root.warm(root.base, modelData.severity)
+        ratio: group.cellData.ratio
+        fillColor: group.isTempCell ? root.tempColor(group.cellData.tempC) : root.warm(root.base, group.cellData.severity)
         trackColor: Qt.rgba(root.base.r, root.base.g, root.base.b, 0.14)
         borderColor: Qt.rgba(root.base.r, root.base.g, root.base.b, 0.4)
-        glow: modelData.severity >= 1
+        glow: group.cellData.severity >= 1
       }
 
       Text {
         visible: root.labelled
         height: root.contentHeight
-        text: modelData.label
+        text: group.cellData.label
         color: root.dim
         font.family: root.fontFamily
         font.pixelSize: root.valueSize
@@ -676,10 +692,10 @@ Panel {
         spacing: 0
 
         Text {
-          visible: modelData.pad !== ""
+          visible: group.cellData.pad !== ""
           height: root.contentHeight
-          text: modelData.pad
-          color: root.warm(root.base, modelData.severity)
+          text: group.cellData.pad
+          color: root.warm(root.base, group.cellData.severity)
           opacity: root.padOpacity
           font.family: root.fontFamily
           font.pixelSize: root.valueSize
@@ -690,10 +706,10 @@ Panel {
         Text {
           id: valueText
           height: root.contentHeight
-          text: modelData.value
+          text: group.cellData.value
           color: group.isTempCell
-            ? root.tempColor(modelData.tempC)
-            : root.warm(root.base, modelData.severity)
+            ? root.tempColor(group.cellData.tempC)
+            : root.warm(root.base, group.cellData.severity)
           font.family: root.fontFamily
           font.pixelSize: root.valueSize
           font.bold: !group.isTempCell
@@ -704,7 +720,7 @@ Panel {
       }
 
       Row {
-        visible: root.showClocks && modelData.clock !== ""
+        visible: root.showClocks && group.cellData.clock !== ""
         height: root.contentHeight
         spacing: Style.space(2)
 
@@ -714,7 +730,7 @@ Panel {
           leftPadding: Style.space(2)
           textFormat: Text.PlainText
           text: root.clockIcon
-          color: root.warm(root.dim, modelData.severity)
+          color: root.warm(root.dim, group.cellData.severity)
           font.family: root.fontFamily
           font.pixelSize: root.valueSize
           verticalAlignment: Text.AlignVCenter
@@ -725,8 +741,8 @@ Panel {
         Text {
           height: root.contentHeight
           textFormat: Text.PlainText
-          text: modelData.clock
-          color: root.warm(root.dim, modelData.severity)
+          text: group.cellData.clock
+          color: root.warm(root.dim, group.cellData.severity)
           font.family: root.fontFamily
           font.pixelSize: root.valueSize
           verticalAlignment: Text.AlignVCenter
@@ -736,7 +752,7 @@ Panel {
       }
 
       Row {
-        visible: root.showTemps && modelData.temp !== ""
+        visible: root.showTemps && group.cellData.temp !== ""
         height: root.contentHeight
         spacing: Style.space(3)
 
@@ -755,8 +771,8 @@ Panel {
           textFormat: Text.PlainText
           height: root.contentHeight
           width: Math.max(implicitWidth, root.tempSlot)
-          text: modelData.temp
-          color: root.tempColor(modelData.tempC)
+          text: group.cellData.temp
+          color: root.tempColor(group.cellData.tempC)
           font.family: root.fontFamily
           font.pixelSize: root.valueSize
           font.bold: false
