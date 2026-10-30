@@ -205,6 +205,13 @@ function parseLoadAverage(raw) {
   return { one: toNumber(parts[0]), five: toNumber(parts[1]), fifteen: toNumber(parts[2]) }
 }
 
+// Apple Silicon's GPU sensors read about 0 degrees while the GPU is powered down,
+// and the SMC holds that for a second, so a bar sampling them would flash a few
+// degrees now and then. Such a reading says nothing: keep the last real one.
+function steadyGpuTemp(kind, reading, last) {
+  return kind === "asahi" && reading < 10 ? last : reading
+}
+
 // ------------------------------------------------------------------ memory
 
 // MemAvailable is the kernel's own estimate of what a new allocation can get
