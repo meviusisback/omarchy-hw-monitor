@@ -118,11 +118,29 @@ for hwmon in /sys/class/hwmon/hwmon*; do
       cpu_thermal | soc_thermal | scpi_sensors | cpu-thermal)
         consider_cpu_temp 70 "$input" "${label:-$name}"
         ;;
+      macsmc_hwmon)
+        # The CPU temperature the SMC's fan control holds steady on macOS. The
+        # die zone below is the hottest spot at each instant, so it jumps by
+        # tens of degrees whenever one core gets busy.
+        [[ $label == "SMC TCMb" ]] && consider_cpu_temp 90 "$input" "$label"
+        ;;
       acpitz)
         consider_cpu_temp 20 "$input" "${label:-$name}"
         ;;
     esac
   done
+done
+
+# Most Apple Silicon SMC sensors and their labels differ per machine, so fall
+# back on the thermal zones the kernel builds from them: the hottest die sensor
+# where there is one (cpu-die-thermal on M4 Pro, macsmc_soc_die on M3), otherwise
+# a performance cluster. M1 and M2 describe no CPU sensor at all.
+for zone in /sys/class/thermal/thermal_zone*; do
+  type=$(read_first "$zone/type") || continue
+  case "$type" in
+    cpu-die-thermal | macsmc_soc_die) consider_cpu_temp 85 "$zone/temp" "$type" ;;
+    cpu-p*-thermal) consider_cpu_temp 50 "$zone/temp" "$type" ;;
+  esac
 done
 
 # ---------------------------------------------------------------------- gpu
@@ -167,6 +185,15 @@ gpu_temp_for() {
   [[ -r $hw/temp1_input ]] && printf '%s' "$hw/temp1_input"
 }
 
+# An Apple Silicon GPU has no hwmon of its own: the SMC reports it through one
+# thermal zone per sensor group, and any of them stands for the GPU.
+asahi_gpu_temp() {
+  local zone
+  for zone in /sys/class/thermal/thermal_zone*; do
+    [[ $(read_first "$zone/type" || true) == gpu*-thermal ]] && { printf '%s' "$zone/temp"; return; }
+  done
+}
+
 gpu_entries=()
 
 for card in /sys/class/drm/card[0-9]*; do
@@ -209,6 +236,7 @@ for card in /sys/class/drm/card[0-9]*; do
     entry+="$(field_path fanPath "$hw/fan1_input")"
     entry+="$(field_path clockPath "$hw/freq1_input")"
   fi
+  [[ $driver == asahi ]] && entry+="$(field_path tempPath "$(asahi_gpu_temp)")"
   entry=${entry%, }
   entry+="}"
 

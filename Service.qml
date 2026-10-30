@@ -190,7 +190,7 @@ Item {
     }
     if (gpuTempFile.path !== "") {
       gpuTempFile.reload()
-      gpuTempC = readTemp(gpuTempFile)
+      gpuTempC = Model.steadyGpuTemp(String(gpuInfo.kind), readTemp(gpuTempFile), gpuTempC)
     }
     if (gpuPowerFile.path !== "") {
       gpuPowerFile.reload()
