@@ -30,7 +30,35 @@ KeyboardPanel {
   property bool showGauges: false
   property string ramFormat: "used/total"
   property string tempFormat: "degree-unit"
+  property var itemOrder: []
   property bool settingsOpen: false
+
+  readonly property var orderKeys: ["gpu", "gpu-temp", "cpu", "cpu-temp", "ram"]
+  readonly property var orderLabels: ({
+    "gpu": "GPU", "gpu-temp": "GPU Temp", "cpu": "CPU", "cpu-temp": "CPU Temp", "ram": "RAM"
+  })
+
+  // Saved order first, then any known item it leaves out, mirroring the bar's own fallback.
+  readonly property var fullOrder: {
+    var out = []
+    for (var i = 0; i < itemOrder.length; i++) {
+      var k = itemOrder[i]
+      if (orderKeys.indexOf(k) !== -1 && out.indexOf(k) === -1) out.push(k)
+    }
+    for (var j = 0; j < orderKeys.length; j++) {
+      if (out.indexOf(orderKeys[j]) === -1) out.push(orderKeys[j])
+    }
+    return out
+  }
+
+  function moveItem(index, delta) {
+    var target = index + delta
+    var next = fullOrder.slice()
+    if (target < 0 || target >= next.length) return
+    var moved = next.splice(index, 1)[0]
+    next.splice(target, 0, moved)
+    persistSetting("itemsOrder", next.join(","))
+  }
 
   signal fahrenheitToggled()
 
@@ -396,6 +424,90 @@ KeyboardPanel {
                   label: "󰁹 Gauges"
                   selected: root.showGauges
                   onPicked: root.persistSetting("showGauges", !root.showGauges)
+                }
+              }
+            }
+
+            // Item Order
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
+
+              Text {
+                width: Style.space(48)
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Order"
+                color: Qt.darker(root.baseColor, 1.4)
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Flow {
+                width: parent.width - Style.space(56)
+                spacing: Style.space(4)
+
+                Repeater {
+                  model: root.fullOrder
+
+                  Rectangle {
+                    id: orderChip
+                    required property string modelData
+                    required property int index
+                    implicitWidth: orderRow.implicitWidth + Style.space(8)
+                    implicitHeight: orderRow.implicitHeight + Style.space(8)
+                    radius: Style.cornerRadius
+                    color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.06)
+                    border.color: Qt.rgba(root.baseColor.r, root.baseColor.g, root.baseColor.b, 0.12)
+                    border.width: 1
+
+                    Row {
+                      id: orderRow
+                      anchors.centerIn: parent
+                      spacing: Style.space(6)
+
+                      Text {
+                        text: "◀"
+                        opacity: orderChip.index > 0 ? (leftMouse.containsMouse ? 1 : 0.7) : 0.2
+                        color: root.baseColor
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        MouseArea {
+                          id: leftMouse
+                          anchors.fill: parent
+                          anchors.margins: -Style.space(3)
+                          hoverEnabled: true
+                          enabled: orderChip.index > 0
+                          cursorShape: Qt.PointingHandCursor
+                          onClicked: root.moveItem(orderChip.index, -1)
+                        }
+                      }
+
+                      Text {
+                        text: root.orderLabels[orderChip.modelData]
+                        color: root.baseColor
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                      }
+
+                      Text {
+                        text: "▶"
+                        opacity: orderChip.index < root.fullOrder.length - 1 ? (rightMouse.containsMouse ? 1 : 0.7) : 0.2
+                        color: root.baseColor
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.font.caption
+                        MouseArea {
+                          id: rightMouse
+                          anchors.fill: parent
+                          anchors.margins: -Style.space(3)
+                          hoverEnabled: true
+                          enabled: orderChip.index < root.fullOrder.length - 1
+                          cursorShape: Qt.PointingHandCursor
+                          onClicked: root.moveItem(orderChip.index, 1)
+                        }
+                      }
+                    }
+                  }
                 }
               }
             }
