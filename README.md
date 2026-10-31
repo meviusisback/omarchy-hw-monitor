@@ -1,13 +1,63 @@
-# Hardware Monitor — Omarchy bar widget & system panel
+<div align="center">
 
-Memory, CPU, and GPU in the bar, with a first-class visual system panel popup. Four readouts, cycled with a right click: sleek icon groups (Noctalia-style), gauges alone, gauges with temperatures, or the numbers spelled out.
+# Hardware Monitor
+
+**GPU, CPU, temperature, and RAM in the bar as sleek icon + figure readouts, with a first-class visual system panel.**
+
+[![Release](https://img.shields.io/github/v/release/meviusisback/omarchy-hw-monitor)](https://github.com/meviusisback/omarchy-hw-monitor/releases)
+[![License: MIT](https://img.shields.io/github/license/meviusisback/omarchy-hw-monitor)](LICENSE)
+![Linux](https://img.shields.io/badge/linux-supported-1793d1)
 
 ![The system panel, anchored under the bar readout](preview.png)
 
-Bar sampling reads `/proc` and `/sys` inside the shell process via `FileView` —
-no polling script on a timer for that. Two documented helpers do fork: `nvidia-smi`
-on the sample interval (NVIDIA cards only — they expose no sysfs telemetry) and
-`proc_top.py` up to every 3 s, but only while the system panel is open.
+*Based on [Edgar Silva's omarchy-hw-monitor](https://github.com/edgarsilva/omarchy-hw-monitor) (MIT) — continued and extended.*
+
+</div>
+
+## Why it exists
+
+Checking thermals or "what is eating my RAM" should not mean opening a
+terminal. The bar keeps the four numbers that matter — GPU, CPU, temperature,
+memory — readable at a glance, and one click opens a full visual breakdown
+without leaving the workspace. Everything stays in one screen: the glance in
+the bar, the diagnosis in the panel.
+
+## What it does
+
+- **Four bar readouts, cycled with a right click** — sleek icon groups
+  (Noctalia-style), gauges alone, gauges with temperatures, or the numbers
+  spelled out as words.
+- **Visual system panel on left click** — telemetry dials, 60 s CPU sparkline,
+  processor details, memory breakdown, top processes, and graphics metrics,
+  with full keyboard navigation.
+- **Top processes by RAM or CPU** — with a Group toggle that collapses rows
+  per application, and per-tab `[domain]` hints for Chromium-family browsers
+  when grouping is off (a hint, not evidence — see [How it works](#how-it-works)).
+- **Warn/critical coloring** — numbers, glyphs, and gauges warm toward the
+  theme's urgent colour at configurable load and temperature thresholds.
+- **Per-widget settings** — readout mode, formats, icons, thresholds, and
+  which screens to draw on, all without touching code.
+
+### The four bar readouts
+
+**`icons`** *(default)* — GPU load, CPU load, CPU temperature with thermometer
+icon, and RAM (e.g. `0% 34% 46°C 11/23G`), ~150px.
+
+**`compact`** — a glyph and a gauge per component, ~80px. The gauge fills from
+the bottom and warms toward the theme's urgent colour as load climbs, so the
+machine's state is readable without reading a digit.
+
+![compact](preview-compact.png)
+
+**`full`** — the same, plus CPU and GPU temperature, ~106px. Memory has no
+temperature sensor, so its gauge is the whole readout.
+
+![full](preview-full.png)
+
+**`labels`** — the Waybar hardware group, tightened: no glyph, no gauge, each
+label welded to its figure, ~230px.
+
+![labels](preview-labels.png)
 
 ## Install
 
@@ -26,97 +76,97 @@ Nothing to configure — it finds this machine's sensors on its own.
 
 ## Usage
 
-- **Left click** — opens the built-in visual system telemetry panel anchored to the widget (or runs `clickCommand` if configured).
-- **Right click** — cycles `icons` → `compact` → `full` → `labels`, and remembers it.
+- **Left click** — opens the built-in visual system telemetry panel anchored to
+  the widget (or runs `clickCommand` if configured).
+- **Right click** — cycles `icons` → `compact` → `full` → `labels`, and
+  remembers it.
 - **Middle click** — resamples immediately.
-- **Hover** — says what the clicks do. The full breakdown is a `status` call away (see [IPC](#ipc)).
+- **Hover** — says what the clicks do. The full breakdown is a `status` call
+  away (see below).
 
 ### The system panel
 
-Clicking the widget opens an Omarchy keyboard-driven popup panel anchored to the bar:
+Clicking the widget opens an Omarchy keyboard-driven popup panel anchored to
+the bar:
 
-- **Hero summary & Unit Toggle** — core/thread count, GPU summary, and a live toggle switch between **°C** and **°F** at the top right.
-- **Telemetry dials** — 270° circular gauges with live figures for CPU load & temp, RAM usage, and GPU load & temp with dynamic temperature coloring.
-- **60s CPU load sparkline** — live history trend buffer sampled while open (zero background cost when closed).
-- **Processor details** — full CPU model name (without cutoff), load, clock frequency, dynamic temperature color, and 1m/5m/15m load average meters.
-- **Memory breakdown** — used/total GiB visual meter, available, cache, and swap usage.
-- **Top processes** — the top processes sorted by RAM or CPU (switch in the header), with share and CPU% per process, blue ramp bars toward the theme accent. The Group toggle collapses them per application (systemd scope, name fallback) with counts and sums. With grouping off, Chromium-family browsers are disambiguated by role (`[main]`, `[gpu]`, `[ext]`, `[zygote]`…) or by the tab's domain (`brave [mail.google.com]`). That domain has two sources: for an app window it is the URL on the command line (a PWA launched with only an app id shows `[app]`); otherwise it is the most frequent host found in the renderer's own memory, when the kernel lets the shell attach to that process — with no minimum count, since one sighting already makes a host a candidate, and every sighting counts once, so whichever appears most often wins among the hosts that are not on the built-in CDN and asset ignore list. Treat it as a hint, not as evidence: the page decides what its renderer holds, so a site can make its row read as a different domain. The row reads `[tab]` when the attach is refused, when nothing was found, or when what was found is not a plain domain name (a single-label intranet name, an IPv6 literal, a percent-encoded host). An app window whose URL is not a plain domain shows its role tag instead. Firefox tabs stay plain. Sampled only while the panel is open (zero cost while closed).
-- **Graphics metrics** — full GPU card name, load, dynamic temperature color, VRAM meter, power draw (W), fan RPM, and clock speeds.
-- **Keyboard navigation** — `Escape` to close, `Tab`/`Shift+Tab` to switch panels, `r` to resample, `c`/`f` to toggle °C/°F.
+- **Hero summary & Unit Toggle** — core/thread count, GPU summary, and a live
+  toggle between **°C** and **°F** at the top right.
+- **Telemetry dials** — 270° circular gauges with live figures for CPU load &
+  temp, RAM usage, and GPU load & temp with dynamic temperature coloring.
+- **60s CPU load sparkline** — live history trend buffer sampled while open
+  (zero background cost when closed).
+- **Processor details** — full CPU model name (without cutoff), load, clock
+  frequency, dynamic temperature color, and 1m/5m/15m load average meters.
+- **Memory breakdown** — used/total GiB visual meter, available, cache, and
+  swap usage.
+- **Top processes** — the top processes sorted by RAM or CPU (switch in the
+  header), with share and CPU% per process, blue ramp bars toward the theme
+  accent. The Group toggle collapses them per application (systemd scope, name
+  fallback) with counts and sums. With grouping off, Chromium-family browsers
+  are disambiguated by role (`[main]`, `[gpu]`, `[ext]`, `[zygote]`…) or by the
+  tab's domain (`brave [mail.google.com]`). That domain has two sources: for an
+  app window it is the URL on the command line (a PWA launched with only an app
+  id shows `[app]`); otherwise it is the most frequent host found in the
+  renderer's own memory, when the kernel lets the shell attach to that process
+  — with no minimum count, since one sighting already makes a host a candidate,
+  and every sighting counts once, so whichever appears most often wins among
+  the hosts that are not on the built-in CDN and asset ignore list. Treat it as
+  a hint, not as evidence: the page decides what its renderer holds, so a site
+  can make its row read as a different domain. The row reads `[tab]` when the
+  attach is refused, when nothing was found, or when what was found is not a
+  plain domain name (a single-label intranet name, an IPv6 literal, a
+  percent-encoded host). An app window whose URL is not a plain domain shows its
+  role tag instead. Firefox tabs stay plain. Sampled only while the panel is
+  open (zero cost while closed).
+- **Graphics metrics** — full GPU card name, load, dynamic temperature color,
+  VRAM meter, power draw (W), fan RPM, and clock speeds.
+- **Keyboard navigation** — `Escape` to close, `Tab`/`Shift+Tab` to switch
+  panels, `r` to resample, `c`/`f` to toggle °C/°F.
 
-### The four bar readouts
+### IPC
 
-**`icons`** *(default)* — GPU load, CPU load, CPU temperature with thermometer icon, and RAM (e.g. `󰾲 0%    34%    46°C    11/23G`), ~150px.
-
-**`compact`** — a glyph and a gauge per component, ~80px. The gauge fills from
-the bottom and warms toward the theme's urgent colour as load climbs, so the
-machine's state is readable without reading a digit.
-
-![compact](preview-compact.png)
-
-**`full`** — the same, plus CPU and GPU temperature, ~106px. Memory has no
-temperature sensor, so its gauge is the whole readout.
-
-![full](preview-full.png)
-
-**`labels`** — the Waybar hardware group, tightened: no glyph, no gauge, each
-label welded to its figure, ~230px.
-
-![labels](preview-labels.png)
-
-## What it reads
-
-| | Source | Shown |
-|---|---|---|
-| Memory | `/proc/meminfo` | used against total, measured with `MemAvailable` so reclaimable page cache is not counted as used |
-| CPU load | `/proc/stat` | jiffie deltas between samples, `iowait` counted as idle — the same arithmetic `top` and `btop` use |
-| CPU clock | `/proc/cpuinfo` | mean across every thread |
-| CPU temperature | `hwmon` | die/package sensor, picked by scoring (`k10temp` `Tdie`/`Tctl`, `coretemp` `Package id 0`, `zenpower`, ThinkPad, ARM SoC, then `acpitz`) |
-| GPU | the card's own `sysfs` | load, edge temperature, VRAM, board power, fan, core clock |
-| Load average | `/proc/loadavg` | 1/5/15 minute |
-| Browser tab hints | `/proc/<pid>/mem` of Chromium-family processes | read-only, and only for the processes the kernel lets the shell attach to. With the Group toggle off, the most frequent host in the renderer's memory becomes the `[domain]` tag, and rows read `[tab]` when the attach is refused or nothing was found |
-
-An NVIDIA card is the exception: it reports none of this through sysfs, so it is
-polled through `nvidia-smi` on the same interval.
-
-`proc_top.py` keeps one small state file in the run directory:
-`/run/user/<uid>/hw_monitor_browser_cache.json` (0600; **on a default setup that
-is tmpfs**, cleared on logout — the widget uses whatever `$XDG_RUNTIME_DIR`
-points at and does not check the filesystem type, so a runtime dir you have
-moved to disk keeps the file). It holds, for each browser row, the label —
-**which for a tab is a domain you have open** — plus the previous CPU snapshot,
-so a poll costs 20–40 ms instead of re-scanning `/proc` twice. An entry is
-reused for 45 s, or 10 s for a sample that could not be resolved in full; note
-that is the entry's validity, not the file's lifetime: the file is only
-rewritten while the panel is open, so the last set of domains stays there until
-logout or until you delete it.
-Without a writable runtime directory the cache is skipped rather than written
-elsewhere. Deleting the file at any time is safe — the next poll rebuilds it.
-
-## How it samples
-
-Sensor paths are found once, at load, by [`hw-probe`](hw-probe) — a small shell
-script, because working out *which* files a machine exposes means globbing
-`hwmon` and matching labels, and every vendor names its sensors differently.
-After that the resolved sysfs/`/proc` paths need no fork on a timer the way a
-Waybar custom module does: the widget reads them directly with `FileView`, which
-is what makes a two-second interval reasonable for something that runs for the
-life of your session. The documented exceptions are `nvidia-smi` (NVIDIA cards)
-and `proc_top.py` (open panel only).
-
-`blockAllReads` is set on those views deliberately. Without it `reload()` is
-asynchronous and `text()` returns the *previous* tick's contents, so every
-readout lags a full interval. These are kernel-generated files of a few KB, so
-a blocking read never stalls the UI.
-
-Run the probe yourself to see what it found:
+Call methods through `omarchy-shell`:
 
 ```sh
-~/.config/omarchy/plugins/meviusisback.hw-monitor/hw-probe | jq
+# Open the system telemetry popup
+omarchy-shell meviusisback.hw-monitor open
+
+# Close the system panel
+omarchy-shell meviusisback.hw-monitor close
+
+# Toggle the system panel popup
+omarchy-shell meviusisback.hw-monitor toggle
+
+# Toggle Celsius / Fahrenheit
+omarchy-shell meviusisback.hw-monitor toggleFahrenheit
+
+# Cycle the display mode
+omarchy-shell meviusisback.hw-monitor cycleMode
+
+# Force an immediate resample
+omarchy-shell meviusisback.hw-monitor refresh
+
+# Dump the full multi-line telemetry breakdown
+omarchy-shell meviusisback.hw-monitor status
 ```
 
-A sensor missing from that output is one this machine does not expose, and the
-widget renders a dash rather than a zero that looks like real data.
+## Requirements
+
+- A Nerd Font for the glyphs, which Omarchy already ships
+- `pciutils` (`lspci`) — optional, only to name the GPU card in the panel
+- `nvidia-smi` — only for NVIDIA cards, installed with the driver
+- `python3` (`/usr/bin/python3`) — only for the top-processes panel section;
+  the section shows a fallback message when absent
+- a writable runtime directory (`/run/user/<uid>`) — only for the
+  top-processes cache; without one the cache is skipped
+- a kernel that lets the shell attach to the browser's renderer — only for the
+  `[domain]` hints; otherwise rows read `[tab]` instead
+
+No pip packages, no daemon, no elevated privileges. Data sources: `/proc` and
+`/sys` via `FileView`, the optional helpers above, `proc_top.py` reading
+`/proc/<pid>/mem` for the browser hints — and `clickCommand`, which runs an
+arbitrary user-configured shell command on left click when set (empty by
+default, which opens the built-in panel instead).
 
 ## Settings
 
@@ -174,6 +224,11 @@ omarchy bar set meviusisback.hw-monitor fahrenheit true --json
 | `ramIcon` | string | `""` | Glyph marking the RAM figure. |
 | `clockIcon` | string | `"󰓅"` | Glyph marking the clock figure. Empty draws the number alone. |
 | `iconSize` | int | `0` | Overall scale in pixels. `0` follows the bar's icon font. |
+| `padOpacity` | number | `0.3` | Opacity of the padded percentage background (0-1). |
+| `gpuIconRotation` | int | `0` | Rotate the GPU glyph (0, 90, 180, 270). |
+| `cpuIconRotation` | int | `0` | Rotate the CPU glyph (0, 90, 180, 270). |
+| `tempIconRotation` | int | `0` | Rotate the temperature glyph (0, 90, 180, 270). |
+| `ramIconRotation` | int | `0` | Rotate the memory glyph (0, 90, 180, 270). |
 | `refreshIntervalSec` | int | `2` | Seconds between samples. `1` is as fast as `FileView` makes sense; `5` is plenty for a background bar. |
 | `gpu` | string | `"auto"` | `"auto"` picks the card reporting load; otherwise an index (`0`, `1`) or name substring. |
 | `warnPercent` | int | `70` | Load threshold where numbers and glyphs warm toward the urgent colour. |
@@ -183,47 +238,62 @@ omarchy bar set meviusisback.hw-monitor fahrenheit true --json
 | `clickCommand` | string | `""` | Shell command run on left click via `bash -lc` as you, unsandboxed. Empty opens the built-in system panel popup. Only set it from a source you trust: whatever can write this widget's settings can run code on your next click. |
 | `monitors` | array/string | `[]` | Connector names to draw on (e.g. `["DP-1"]`). Empty draws on all screens. |
 
-## IPC
+## How it works
 
-Call methods through `omarchy-shell`:
+Bar sampling reads `/proc` and `/sys` inside the shell process via `FileView` —
+no polling script on a timer for that. Two documented helpers do fork:
+`nvidia-smi` on the sample interval (NVIDIA cards only — they expose no sysfs
+telemetry) and `proc_top.py` up to every 3 s, but only while the system panel
+is open.
+
+| | Source | Shown |
+|---|---|---|
+| Memory | `/proc/meminfo` | used against total, measured with `MemAvailable` so reclaimable page cache is not counted as used |
+| CPU load | `/proc/stat` | jiffie deltas between samples, `iowait` counted as idle — the same arithmetic `top` and `btop` use |
+| CPU clock | `/proc/cpuinfo` | mean across every thread |
+| CPU temperature | `hwmon` | die/package sensor, picked by scoring (`k10temp` `Tdie`/`Tctl`, `coretemp` `Package id 0`, `zenpower`, ThinkPad, ARM SoC, then `acpitz`) |
+| GPU | the card's own `sysfs` | load, edge temperature, VRAM, board power, fan, core clock |
+| Load average | `/proc/loadavg` | 1/5/15 minute |
+| Browser tab hints | `/proc/<pid>/mem` of Chromium-family processes | read-only, and only for the processes the kernel lets the shell attach to. With the Group toggle off, the most frequent host in the renderer's memory becomes the `[domain]` tag, and rows read `[tab]` when the attach is refused or nothing was found |
+
+An NVIDIA card is the exception: it reports none of this through sysfs, so it
+is polled through `nvidia-smi` on the same interval.
+
+Sensor paths are found once, at load, by [`hw-probe`](hw-probe) — a small shell
+script, because working out *which* files a machine exposes means globbing
+`hwmon` and matching labels, and every vendor names its sensors differently.
+After that the resolved sysfs/`/proc` paths need no fork on a timer the way a
+Waybar custom module does: the widget reads them directly with `FileView`, which
+is what makes a two-second interval reasonable for something that runs for the
+life of your session.
+
+`blockAllReads` is set on those views deliberately. Without it `reload()` is
+asynchronous and `text()` returns the *previous* tick's contents, so every
+readout lags a full interval. These are kernel-generated files of a few KB, so
+a blocking read never stalls the UI.
+
+Run the probe yourself to see what it found:
 
 ```sh
-# Open the system telemetry popup
-omarchy-shell meviusisback.hw-monitor open
-
-# Close the system panel
-omarchy-shell meviusisback.hw-monitor close
-
-# Toggle the system panel popup
-omarchy-shell meviusisback.hw-monitor toggle
-
-# Toggle Celsius / Fahrenheit
-omarchy-shell meviusisback.hw-monitor toggleFahrenheit
-
-# Cycle the display mode
-omarchy-shell meviusisback.hw-monitor cycleMode
-
-# Force an immediate resample
-omarchy-shell meviusisback.hw-monitor refresh
-
-# Dump the full multi-line telemetry breakdown
-omarchy-shell meviusisback.hw-monitor status
+~/.config/omarchy/plugins/meviusisback.hw-monitor/hw-probe | jq
 ```
 
-## Requirements
+A sensor missing from that output is one this machine does not expose, and the
+widget renders a dash rather than a zero that looks like real data.
 
-- A Nerd Font for the glyphs, which Omarchy already ships
-- `pciutils` (`lspci`) — optional, only to name the GPU card in the panel
-- `nvidia-smi` — only for NVIDIA cards, installed with the driver
-- `python3` (`/usr/bin/python3`) — only for the top-processes panel section; the section shows a fallback message when absent
-- a writable runtime directory (`/run/user/<uid>`) — only for the top-processes cache; without one the cache is skipped
-- a kernel that lets the shell attach to the browser's renderer — only for the `[domain]` hints; otherwise rows read `[tab]` instead
-
-No pip packages, no daemon, no elevated privileges. Data sources: `/proc` and
-`/sys` via `FileView`, the optional helpers above, `proc_top.py` reading
-`/proc/<pid>/mem` for the browser hints — and `clickCommand`, which
-runs an arbitrary user-configured shell command on left click when set (empty by
-default, which opens the built-in panel instead).
+`proc_top.py` keeps one small state file in the run directory:
+`/run/user/<uid>/hw_monitor_browser_cache.json` (0600; **on a default setup
+that is tmpfs**, cleared on logout — the widget uses whatever
+`$XDG_RUNTIME_DIR` points at and does not check the filesystem type, so a
+runtime dir you have moved to disk keeps the file). It holds, for each browser
+row, the label — **which for a tab is a domain you have open** — plus the
+previous CPU snapshot, so a poll costs 20–40 ms instead of re-scanning `/proc`
+twice. An entry is reused for 45 s, or 10 s for a sample that could not be
+resolved in full; note that is the entry's validity, not the file's lifetime:
+the file is only rewritten while the panel is open, so the last set of domains
+stays there until logout or until you delete it. Without a writable runtime
+directory the cache is skipped rather than written elsewhere. Deleting the file
+at any time is safe — the next poll rebuilds it.
 
 ## Removal
 
