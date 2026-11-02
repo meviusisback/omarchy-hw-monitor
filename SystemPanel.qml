@@ -557,14 +557,15 @@ KeyboardPanel {
             id: gpuDial
             width: (parent.width - parent.spacing * 2) / 3
             title: "GPU"
-            valueText: hw.hasGpu ? (hw.gpuPercent >= 0 ? Math.round(hw.gpuPercent) + "%" : (hw.gpuVramPercent >= 0 ? Math.round(hw.gpuVramPercent) + "%" : "–")) : "N/A"
-            subText: hw.hasGpu && hw.gpuTempC > 0 ? Model.formatTemp(hw.gpuTempC, root.fahrenheit) : (hw.hasGpu && hw.gpuWatts >= 0 ? Model.formatWatts(hw.gpuWatts) : "")
+            readonly property bool tempOnly: hw.hasGpu && hw.gpuPercent < 0 && hw.gpuVramPercent < 0
+            valueText: hw.hasGpu ? (hw.gpuPercent >= 0 ? Math.round(hw.gpuPercent) + "%" : (hw.gpuVramPercent >= 0 ? Math.round(hw.gpuVramPercent) + "%" : (hw.gpuTempC > 0 ? Model.formatTemp(hw.gpuTempC, root.fahrenheit) : "–"))) : "N/A"
+            subText: !tempOnly && hw.hasGpu && hw.gpuTempC > 0 ? Model.formatTemp(hw.gpuTempC, root.fahrenheit) : (hw.hasGpu && hw.gpuWatts >= 0 ? Model.formatWatts(hw.gpuWatts) : "")
             subTextColor: root.tempColor(hw.gpuTempC)
-            ratio: hw.hasGpu ? (hw.gpuPercent >= 0 ? hw.gpuPercent / 100 : (hw.gpuVramPercent >= 0 ? hw.gpuVramPercent / 100 : 0)) : 0
+            ratio: tempOnly ? Math.min(1, Math.max(0, (hw.gpuTempC - 30) / Math.max(1, root.criticalTempC - 30))) : (hw.hasGpu ? (hw.gpuPercent >= 0 ? hw.gpuPercent / 100 : (hw.gpuVramPercent >= 0 ? hw.gpuVramPercent / 100 : 0)) : 0)
             baseColor: root.baseColor
             hotColor: root.hotColor
             accentColor: Color.accent
-            severity: hw.hasGpu ? Model.severity(hw.gpuPercent >= 0 ? hw.gpuPercent : hw.gpuVramPercent, root.warnPercent, root.criticalPercent) : 0
+            severity: tempOnly ? Model.severity(hw.gpuTempC, root.warnTempC, root.criticalTempC) : (hw.hasGpu ? Model.severity(hw.gpuPercent >= 0 ? hw.gpuPercent : hw.gpuVramPercent, root.warnPercent, root.criticalPercent) : 0)
             fontFamily: root.fontFamily
           }
         }

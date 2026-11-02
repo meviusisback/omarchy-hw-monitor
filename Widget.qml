@@ -263,7 +263,7 @@ Panel {
     var cellMap = {}
 
     // GPU Load
-    if (showGpu && hw.hasGpu) {
+    if (showGpu && hw.hasGpu && (hw.gpuPercent >= 0 || hw.gpuVramPercent >= 0)) {
       var busy = hw.gpuPercent
       var meterValue = busy >= 0 ? busy : hw.gpuVramPercent
       cellMap["gpu"] = {

@@ -201,7 +201,7 @@ omarchy bar set meviusisback.hw-monitor fahrenheit true --json
 |---|---|---|---|
 | `mode` | string | `"icons"` | `"icons"`, `"compact"`, `"full"`, or `"labels"`. Right-clicking cycles them. |
 | `itemsOrder` | array/string | `"gpu,cpu,cpu-temp,ram"` | Sequence of telemetry items in the top bar (`"gpu,cpu,cpu-temp,ram"` or `"gpu,cpu,cpu-temp,gpu-temp,ram"`). |
-| `showGpu` | bool | `true` | Show GPU load (hidden automatically if no card was found). |
+| `showGpu` | bool | `true` | Show GPU load (hidden automatically if no card reports load or VRAM; such a card shows its temperature in the panel, and in the bar through `showGpuTemp`). |
 | `showCpu` | bool | `true` | Show CPU load. |
 | `showCpuTemp` | bool | `true` | Show CPU temperature with thermometer icon. |
 | `showGpuTemp` | bool | `false` | Show GPU temperature in the bar. |
