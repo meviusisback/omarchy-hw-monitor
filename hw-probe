@@ -155,6 +155,7 @@ have_lspci=0
 
 gpu_name_for() {
   local dev=$1 driver=$2 slot line name
+  [[ $driver == asahi ]] && { printf 'Apple GPU'; return; }
   slot=$(sed -n 's/^PCI_SLOT_NAME=//p' "$dev/uevent" 2>/dev/null | head -1)
   if ((have_lspci)) && [[ -n $slot ]]; then
     line=$("$lspci_bin" -s "$slot" 2>/dev/null | head -1)
