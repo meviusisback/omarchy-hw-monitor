@@ -58,6 +58,7 @@ Item {
 
   property real gpuPercent: -1
   property real gpuTempC: -1
+  property real gpuTempRealMs: 0
   property real gpuWatts: -1
   property real gpuRpm: -1
   property real gpuMhz: -1
@@ -190,7 +191,10 @@ Item {
     }
     if (gpuTempFile.path !== "") {
       gpuTempFile.reload()
-      gpuTempC = readTemp(gpuTempFile)
+      var gpuReading = readTemp(gpuTempFile)
+      var gpuReadMs = Date.now()
+      gpuTempC = Model.steadyGpuTemp(String(gpuInfo.kind), gpuReading, gpuTempC, gpuTempRealMs, gpuReadMs)
+      if (gpuReading >= 10) gpuTempRealMs = gpuReadMs
     }
     if (gpuPowerFile.path !== "") {
       gpuPowerFile.reload()

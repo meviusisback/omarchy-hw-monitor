@@ -201,7 +201,7 @@ omarchy bar set meviusisback.hw-monitor fahrenheit true --json
 |---|---|---|---|
 | `mode` | string | `"icons"` | `"icons"`, `"compact"`, `"full"`, or `"labels"`. Right-clicking cycles them. |
 | `itemsOrder` | array/string | `"gpu,cpu,cpu-temp,ram"` | Sequence of telemetry items in the top bar (`"gpu,cpu,cpu-temp,ram"` or `"gpu,cpu,cpu-temp,gpu-temp,ram"`). |
-| `showGpu` | bool | `true` | Show GPU load (hidden automatically if no card was found). |
+| `showGpu` | bool | `true` | Show GPU load (hidden automatically if no card reports load or VRAM; such a card shows its temperature in the panel, and in the bar through `showGpuTemp`). |
 | `showCpu` | bool | `true` | Show CPU load. |
 | `showCpuTemp` | bool | `true` | Show CPU temperature with thermometer icon. |
 | `showGpuTemp` | bool | `false` | Show GPU temperature in the bar. |
@@ -251,8 +251,8 @@ is open.
 | Memory | `/proc/meminfo` | used against total, measured with `MemAvailable` so reclaimable page cache is not counted as used |
 | CPU load | `/proc/stat` | jiffie deltas between samples, `iowait` counted as idle — the same arithmetic `top` and `btop` use |
 | CPU clock | `/proc/cpuinfo` | mean across every thread |
-| CPU temperature | `hwmon` | die/package sensor, picked by scoring (`k10temp` `Tdie`/`Tctl`, `coretemp` `Package id 0`, `zenpower`, ThinkPad, ARM SoC, then `acpitz`) |
-| GPU | the card's own `sysfs` | load, edge temperature, VRAM, board power, fan, core clock |
+| CPU temperature | `hwmon`, thermal zones on Apple Silicon | die/package sensor, picked by scoring (`k10temp` `Tdie`/`Tctl`, `coretemp` `Package id 0`, `zenpower`, Apple `SMC TCMb`/`cpu-die-thermal`/`macsmc_soc_die`, ARM SoC, ThinkPad, Apple `cpu-p*-thermal`, then `acpitz`) |
+| GPU | the card's own `sysfs` | load, edge temperature, VRAM, board power, fan, core clock. Apple Silicon has no such files: temperature only, from a `gpu*-thermal` zone, and a Mac with no such zone shows no GPU at all. While the GPU is powered down its sensors read about 0, so the last real reading is held for 10 s, then shown as unknown |
 | Load average | `/proc/loadavg` | 1/5/15 minute |
 | Browser tab hints | `/proc/<pid>/mem` of Chromium-family processes | read-only, and only for the processes the kernel lets the shell attach to. With the Group toggle off, the most frequent host in the renderer's memory becomes the `[domain]` tag, and rows read `[tab]` when the attach is refused or nothing was found |
 
@@ -261,7 +261,8 @@ is polled through `nvidia-smi` on the same interval.
 
 Sensor paths are found once, at load, by [`hw-probe`](hw-probe) — a small shell
 script, because working out *which* files a machine exposes means globbing
-`hwmon` and matching labels, and every vendor names its sensors differently.
+`hwmon` and `/sys/class/thermal/thermal_zone*` and matching their labels and
+types, and every vendor names its sensors differently.
 After that the resolved sysfs/`/proc` paths need no fork on a timer the way a
 Waybar custom module does: the widget reads them directly with `FileView`, which
 is what makes a two-second interval reasonable for something that runs for the
