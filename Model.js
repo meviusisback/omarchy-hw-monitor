@@ -207,9 +207,13 @@ function parseLoadAverage(raw) {
 
 // Apple Silicon's GPU sensors read about 0 degrees while the GPU is powered down,
 // and the SMC holds that for a second, so a bar sampling them would flash a few
-// degrees now and then. Such a reading says nothing: keep the last real one.
-function steadyGpuTemp(kind, reading, last) {
-  return kind === "asahi" && reading < 10 ? last : reading
+// degrees now and then. Such a reading says nothing: keep the last real one for
+// a few samples, then report unknown so a stale figure can't stay on screen.
+var gpuTempHoldMs = 10000
+
+function steadyGpuTemp(kind, reading, last, lastRealMs, nowMs) {
+  if (kind !== "asahi" || reading >= 10) return reading
+  return nowMs - lastRealMs <= gpuTempHoldMs ? last : -1
 }
 
 // ------------------------------------------------------------------ memory

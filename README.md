@@ -252,7 +252,7 @@ is open.
 | CPU load | `/proc/stat` | jiffie deltas between samples, `iowait` counted as idle — the same arithmetic `top` and `btop` use |
 | CPU clock | `/proc/cpuinfo` | mean across every thread |
 | CPU temperature | `hwmon`, thermal zones on Apple Silicon | die/package sensor, picked by scoring (`k10temp` `Tdie`/`Tctl`, `coretemp` `Package id 0`, `zenpower`, ThinkPad, ARM SoC, Apple `SMC TCMb`/`cpu-die-thermal`/`macsmc_soc_die`, then `acpitz`) |
-| GPU | the card's own `sysfs` | load, edge temperature, VRAM, board power, fan, core clock. Apple Silicon: temperature only, from a `gpu*-thermal` zone |
+| GPU | the card's own `sysfs` | load, edge temperature, VRAM, board power, fan, core clock. Apple Silicon: temperature only, from a `gpu*-thermal` zone. While the GPU is powered down its sensors read about 0, so the last real reading is held for 10 s, then shown as unknown |
 | Load average | `/proc/loadavg` | 1/5/15 minute |
 | Browser tab hints | `/proc/<pid>/mem` of Chromium-family processes | read-only, and only for the processes the kernel lets the shell attach to. With the Group toggle off, the most frequent host in the renderer's memory becomes the `[domain]` tag, and rows read `[tab]` when the attach is refused or nothing was found |
 
