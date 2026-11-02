@@ -190,6 +190,7 @@ gpu_temp_for() {
 asahi_gpu_temp() {
   local zone
   for zone in /sys/class/thermal/thermal_zone*; do
+    [[ -r $zone/temp ]] || continue
     [[ $(read_first "$zone/type" || true) == gpu*-thermal ]] && { printf '%s' "$zone/temp"; return; }
   done
 }
@@ -236,7 +237,7 @@ for card in /sys/class/drm/card[0-9]*; do
     entry+="$(field_path fanPath "$hw/fan1_input")"
     entry+="$(field_path clockPath "$hw/freq1_input")"
   fi
-  [[ $driver == asahi ]] && entry+="$(field_path tempPath "$(asahi_gpu_temp)")"
+  [[ $driver == asahi && $entry != *tempPath* ]] && entry+="$(field_path tempPath "$(asahi_gpu_temp)")"
   entry=${entry%, }
   entry+="}"
 
