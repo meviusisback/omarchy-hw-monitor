@@ -361,7 +361,7 @@
         "type": "string",
         "label": "GPU card preference",
         "defaultValue": "auto",
-        "description": "'auto' picks the active card; otherwise an index ('0', '1') or name substring."
+        "description": "'auto' picks the first card; 'busiest' follows the NVIDIA card with the highest load; otherwise an index ('0', '1') or name substring."
       },
       {
         "key": "monitors",

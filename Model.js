@@ -139,12 +139,34 @@ function parseProbe(raw) {
   }
 }
 
+// Index of the NVIDIA card to show in "busiest" mode. The current card stays
+// unless another one is at least `margin` points busier, so two cards with
+// similar load do not make the readout flip every sample.
+function busiestNvidia(samples, current, margin) {
+  var best = -1, bestLoad = -1
+  for (var i = 0; i < samples.length; i++) {
+    if (samples[i] && samples[i].busy > bestLoad) { best = i; bestLoad = samples[i].busy }
+  }
+  if (best < 0) return current
+  var cur = samples[current]
+  if (cur && cur.busy >= 0 && bestLoad < cur.busy + margin) return current
+  return best
+}
+
 // Pick which discovered card the widget reports on. `auto` means the first,
 // which hw-probe has already sorted so a card with a load counter wins.
-function pickGpu(gpus, preference) {
+function pickGpu(gpus, preference, busiestIndex) {
   if (!(gpus instanceof Array) || gpus.length === 0) return null
   var want = String(preference === undefined || preference === null ? "auto" : preference).trim().toLowerCase()
   if (want === "" || want === "auto") return gpus[0]
+
+  // "busiest": follow the card Service picked via busiestNvidia (sticky).
+  if (want === "busiest") {
+    for (var b = 0; b < gpus.length; b++) {
+      if (String(gpus[b].kind) === "nvidia" && gpus[b].index === busiestIndex) return gpus[b]
+    }
+    return gpus[0]
+  }
 
   var index = parseInt(want, 10)
   if (isFinite(index) && index >= 0 && index < gpus.length) return gpus[index]
@@ -275,6 +297,16 @@ function parseNvidia(raw) {
     vramTotalBytes: vramTotal >= 0 ? vramTotal * 1048576 : -1,
     watts: value(4, 2000)
   }
+}
+
+// One sample per card, in nvidia-smi index order; null marks an unparseable line.
+function parseNvidiaAll(raw) {
+  var lines = String(raw || "").trim().split("\n")
+  var out = []
+  for (var i = 0; i < lines.length && i < 16; i++) {
+    out.push(lines[i].trim() ? parseNvidia(lines[i]) : null)
+  }
+  return out
 }
 
 // -------------------------------------------------------------- formatting

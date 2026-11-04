@@ -38,8 +38,11 @@ Item {
 
   property var probe: Model.parseProbe("")
   readonly property var cpuInfo: probe.cpu
-  readonly property var gpuInfo: Model.pickGpu(probe.gpus, setting("gpu", "auto"))
+  readonly property var gpuInfo: Model.pickGpu(probe.gpus, setting("gpu", "auto"), busiestIndex)
   readonly property bool hasGpu: gpuInfo !== null
+  readonly property var nvidiaGpus: (probe.gpus || []).filter(function (g) { return String(g.kind) === "nvidia" })
+  property var nvidiaSamples: []
+  property int busiestIndex: 0
   readonly property bool gpuIsNvidia: hasGpu && String(gpuInfo.kind) === "nvidia"
 
   // -------------------------------------------------------------- readings
@@ -221,8 +224,7 @@ Item {
     var bin = gpuInfo && gpuInfo.nvidiaPath ? String(gpuInfo.nvidiaPath) : "nvidia-smi"
     nvidiaProcess.command = [bin,
                              "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw",
-                             "--format=csv,noheader,nounits",
-                             "--id=" + String(gpuInfo.index !== undefined ? gpuInfo.index : 0)]
+                             "--format=csv,noheader,nounits"]
     _nvidiaBase = String(nvidiaOut.text).length
     _nvidiaErrBase = String(nvidiaErr.text).length
     nvidiaWatchdog.restart()
@@ -230,8 +232,11 @@ Item {
   }
 
   function applyNvidia(raw) {
-    var sample = Model.parseNvidia(raw)
+    var all = Model.parseNvidiaAll(raw)
+    busiestIndex = Model.busiestNvidia(all, busiestIndex, 10)
+    var sample = all[gpuInfo && gpuInfo.index !== undefined ? gpuInfo.index : 0]
     if (!sample) return
+    nvidiaSamples = all
     gpuPercent = sample.busy
     gpuTempC = sample.tempC
     gpuWatts = sample.watts

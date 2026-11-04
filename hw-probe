@@ -232,18 +232,21 @@ nv_bin=$(command -v nvidia-smi 2>/dev/null)
 if [[ -n $nv_bin ]]; then
   # With no NVIDIA card nvidia-smi fails but prints its error on stdout, which
   # would otherwise be taken for a GPU name.
-  nv_name=$("$nv_bin" --query-gpu=name --format=csv,noheader 2>/dev/null | head -1) || nv_name=""
-  if [[ -n $nv_name ]]; then
-    nv="{$(printf '%s: %s, ' "$(json_str kind)" "$(json_str nvidia)")"
-    nv+="$(printf '%s: %s, ' "$(json_str name)" "$(json_str "$(trim "$nv_name")")")"
-    nv+="$(printf '%s: %s, ' "$(json_str nvidiaPath)" "$(json_str "$nv_bin")")"
-    nv+="$(printf '%s: %s' "$(json_str index)" 0)}"
-    if ((${#gpu_entries[@]} == 0)); then
-      gpu_entries=("$nv")
-    else
+  # One entry per card: index is the id nvidia-smi --id expects. The list is
+  # read first so a failing nvidia-smi (its exit status) registers no cards.
+  nv_idx=0
+  nv_names=$("$nv_bin" --query-gpu=name --format=csv,noheader 2>/dev/null) || nv_names=""
+  while IFS= read -r nv_name; do
+    nv_name=$(trim "$nv_name")
+    if [[ -n $nv_name ]]; then
+      nv="{$(printf '%s: %s, ' "$(json_str kind)" "$(json_str nvidia)")"
+      nv+="$(printf '%s: %s, ' "$(json_str name)" "$(json_str "$nv_name")")"
+      nv+="$(printf '%s: %s, ' "$(json_str nvidiaPath)" "$(json_str "$nv_bin")")"
+      nv+="$(printf '%s: %s' "$(json_str index)" "$nv_idx")}"
       gpu_entries+=("$nv")
+      nv_idx=$((nv_idx + 1))
     fi
-  fi
+  done <<<"$nv_names"
 fi
 
 # -------------------------------------------------------------------- output
