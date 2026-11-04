@@ -361,7 +361,7 @@
         "type": "string",
         "label": "GPU card preference",
         "defaultValue": "auto",
-        "description": "'auto' picks the active card; otherwise an index ('0', '1') or name substring."
+        "description": "'auto' prefers the card driving connected displays; otherwise use an index ('0', '1') or name substring."
       },
       {
         "key": "monitors",
