@@ -268,6 +268,15 @@ reports temperature. An explicit index (`0`, `1`) or name substring always
 overrides this. NVIDIA cards are matched to their DRM card by PCI bus id
 (tolerant of `nvidia-smi`'s 8-digit domain padding), so a display-driving RTX
 is preferred over a load-reporting headless iGPU.
+Intel cards (`i915` and `xe`) have no load file either. Their load is derived
+from the render GT's RC6 idle counter (`gt/gt0/rc6_residency_ms` on i915,
+`tile0/gt0/gtidle/idle_residency_ms` on xe): the share of each interval the GT
+was not idle. That is how busy the GT was kept, not `intel_gpu_top`'s
+per-engine figure, which needs perf and therefore root. The clock comes from
+the driver's actual-frequency file. A GT that has runtime-suspended reads as
+idle without being touched, since reading its counters would wake it. An
+integrated GPU has no temperature sensor of its own; it shares the CPU package
+temperature.
 
 `gpu: "busiest"` follows the NVIDIA card with the highest load and switches
 only when another card is at least 10 points busier, so two cards under similar

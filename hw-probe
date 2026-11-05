@@ -205,7 +205,39 @@ drm_card_for_pci_bus() {
   return 1
 }
 
+ # Intel GPUs have no gpu_busy_percent. What both drivers do expose, readable
+# without root, is a running total of the time the render GT has spent idle in
+# its RC6 power state; load is the share of the interval it did not. That is
+# how busy the GT was kept rather than intel_gpu_top's per-engine figure (which
+# needs perf and so root), but it tracks real use closely. The current clock is
+# in MHz here, not in a hwmon freq1_input.
+intel_idle_for() {
+  local card=$1 dev=$2 driver=$3
+  if [[ $driver == xe ]]; then
+    printf '%s' "$dev/tile0/gt0/gtidle/idle_residency_ms"
+  elif [[ -r $card/gt/gt0/rc6_residency_ms ]]; then
+    printf '%s' "$card/gt/gt0/rc6_residency_ms"
+  else
+    printf '%s' "$card/power/rc6_residency_ms"
+  fi
+}
+
+intel_clock_for() {
+  local card=$1 dev=$2 driver=$3
+  if [[ $driver == xe ]]; then
+    printf '%s' "$dev/tile0/gt0/freq0/act_freq"
+  elif [[ -r $card/gt/gt0/rps_act_freq_mhz ]]; then
+    printf '%s' "$card/gt/gt0/rps_act_freq_mhz"
+  else
+    printf '%s' "$card/gt_act_freq_mhz"
+  fi
+}
+
 gpu_entries=()
+# Cards whose load can only be derived from idle time. They go after NVIDIA:
+# on a hybrid laptop the iGPU used to be skipped outright, and "auto" should
+# keep picking the discrete card it picked before.
+idle_entries=()
 
 for card in /sys/class/drm/card[0-9]*; do
   # Connectors are siblings named card1-DP-1; only the card itself has a device.
@@ -248,16 +280,26 @@ for card in /sys/class/drm/card[0-9]*; do
     entry+="$(field_path fanPath "$hw/fan1_input")"
     entry+="$(field_path clockPath "$hw/freq1_input")"
   fi
+  if [[ $driver == i915 || $driver == xe ]]; then
+    entry+="$(field_path idlePath "$(intel_idle_for "$card" "$dev" "$driver")")"
+    entry+="$(field_path clockMhzPath "$(intel_clock_for "$card" "$dev" "$driver")")"
+    # Reading the residency counter takes a runtime-PM reference, so a GT that
+    # has suspended (screen blanked) would be woken on every tick. The widget
+    # checks this first; runtime_status itself never wakes the device.
+    entry+="$(field_path pmStatusPath "$dev/power/runtime_status")"
+  fi
   entry=${entry%, }
   entry+="}"
 
   # A card that reports neither load nor temperature is not worth a slot.
-  [[ $entry == *busyPath* || $entry == *tempPath* ]] || continue
+  [[ $entry == *busyPath* || $entry == *idlePath* || $entry == *tempPath* ]] || continue
 
   # Cards that report load sort first: on a laptop with an iGPU and a dGPU the
   # one with a busy counter is the one the user means by "GPU".
   if [[ $entry == *busyPath* ]]; then
     gpu_entries=("$entry" "${gpu_entries[@]+"${gpu_entries[@]}"}")
+  elif [[ $entry == *idlePath* ]]; then
+    idle_entries+=("$entry")
   else
     gpu_entries+=("$entry")
   fi
@@ -296,6 +338,8 @@ if [[ -n $nv_bin ]]; then
     fi
   done <<<"$nv_names"
 fi
+
+gpu_entries+=("${idle_entries[@]+"${idle_entries[@]}"}")
 
 # -------------------------------------------------------------------- output
 
