@@ -108,7 +108,8 @@ function parseProbe(raw) {
     var gpus = []
     var rawGpus = parsed.gpus instanceof Array ? parsed.gpus : []
     var PATH_KEYS = ["busyPath", "vramUsedPath", "vramTotalPath", "tempPath",
-                     "powerPath", "fanPath", "clockPath"]
+                     "powerPath", "fanPath", "clockPath", "idlePath",
+                     "clockMhzPath", "pmStatusPath"]
     for (var i = 0; i < rawGpus.length; i++) {
       var g = rawGpus[i]
       if (!g || typeof g !== "object") continue
@@ -187,6 +188,19 @@ function cpuUsage(previous, current) {
   var idleDelta = current.idle - previous.idle
   if (totalDelta <= 0) return -1
   return clamp(100 * (1 - idleDelta / totalDelta), 0, 100)
+}
+
+// Intel reports a running total of milliseconds spent idle in RC6 instead of a
+// load figure. Load is the share of wall-clock time between two samples that
+// was not idle. The counter and the clock are sampled together, so an uneven
+// interval cannot skew it; a counter that went backwards (driver reload) gives
+// nothing rather than a negative load.
+function gpuBusyFromIdle(previous, current) {
+  if (!previous || !current) return -1
+  var wallDelta = current.atMs - previous.atMs
+  var idleDelta = current.idleMs - previous.idleMs
+  if (wallDelta <= 0 || idleDelta < 0) return -1
+  return clamp(100 * (1 - idleDelta / wallDelta), 0, 100)
 }
 
 // Average current clock across every thread. /proc/cpuinfo is the one place

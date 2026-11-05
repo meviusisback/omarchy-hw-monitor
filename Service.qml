@@ -121,6 +121,11 @@ Item {
   // two samples, so there is nothing to show until the second one lands.
   property var _prevJiffies: null
 
+  // Previous Intel RC6 idle reading and when it was taken. GPU load on Intel
+  // is derived the same way as CPU load, so it also needs two samples.
+  property var _prevGpuIdle: null
+  property bool _gpuSuspended: false
+
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
@@ -187,6 +192,8 @@ Item {
     if (gpuBusyFile.path !== "") {
       gpuBusyFile.reload()
       gpuPercent = readNumber(gpuBusyFile, 0)
+    } else if (gpuIdleFile.path !== "") {
+      sampleGpuIdle()
     }
     if (gpuTempFile.path !== "") {
       gpuTempFile.reload()
@@ -203,6 +210,9 @@ Item {
     if (gpuClockFile.path !== "") {
       gpuClockFile.reload()
       gpuMhz = readNumber(gpuClockFile, 1000000)
+    } else if (gpuClockMhzFile.path !== "" && !_gpuSuspended) {
+      gpuClockMhzFile.reload()
+      gpuMhz = readNumber(gpuClockMhzFile, 0)
     }
     if (gpuVramUsedFile.path !== "") {
       gpuVramUsedFile.reload()
@@ -212,6 +222,30 @@ Item {
       gpuVramTotalFile.reload()
       gpuVramTotalBytes = readNumber(gpuVramTotalFile, 0)
     }
+  }
+
+  // A runtime-suspended GT is idle by definition, and reading its residency
+  // counter or clock would wake it, so it reads as 0% without touching either.
+  // The baseline is dropped too: the next delta must not span the suspension.
+  function sampleGpuIdle() {
+    _gpuSuspended = false
+    if (gpuPmStatusFile.path !== "") {
+      gpuPmStatusFile.reload()
+      _gpuSuspended = String(gpuPmStatusFile.text()).trim() === "suspended"
+    }
+    if (_gpuSuspended) {
+      _prevGpuIdle = null
+      gpuPercent = 0
+      gpuMhz = 0
+      return
+    }
+    gpuIdleFile.reload()
+    var idleMs = readNumber(gpuIdleFile, 0)
+    if (idleMs < 0) return
+    var current = { idleMs: idleMs, atMs: Date.now() }
+    var usage = Model.gpuBusyFromIdle(_prevGpuIdle, current)
+    if (usage >= 0) gpuPercent = usage
+    _prevGpuIdle = current
   }
 
   function sampleNvidia() {
@@ -318,6 +352,24 @@ Item {
   FileView {
     id: gpuClockFile
     path: root.hasGpu && root.gpuInfo.clockPath ? String(root.gpuInfo.clockPath) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+  FileView {
+    id: gpuIdleFile
+    path: root.hasGpu && root.gpuInfo.idlePath ? String(root.gpuInfo.idlePath) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+  FileView {
+    id: gpuClockMhzFile
+    path: root.hasGpu && root.gpuInfo.clockMhzPath ? String(root.gpuInfo.clockMhzPath) : ""
+    blockAllReads: true
+    printErrors: false
+  }
+  FileView {
+    id: gpuPmStatusFile
+    path: root.hasGpu && root.gpuInfo.pmStatusPath ? String(root.gpuInfo.pmStatusPath) : ""
     blockAllReads: true
     printErrors: false
   }
