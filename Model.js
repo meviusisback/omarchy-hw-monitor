@@ -231,12 +231,17 @@ function cpuUsage(previous, current) {
 // load figure. Load is the share of wall-clock time between two samples that
 // was not idle. The counter and the clock are sampled together, so an uneven
 // interval cannot skew it; a counter that went backwards (driver reload) gives
-// nothing rather than a negative load.
-function gpuBusyFromIdle(previous, current) {
+// nothing rather than a negative load. A wall gap far beyond the sample
+// interval means the counter sat frozen while time advanced — suspend/resume
+// or a clock step — and the delta would read ~100%; refuse it and re-baseline.
+// Twice the interval plus headroom covers timer jitter without hiding real load.
+function gpuBusyFromIdle(previous, current, maxWallMs) {
   if (!previous || !current) return -1
   var wallDelta = current.atMs - previous.atMs
   var idleDelta = current.idleMs - previous.idleMs
   if (wallDelta <= 0 || idleDelta < 0) return -1
+  var cap = toNumberSafe(maxWallMs, 0)
+  if (cap > 0 && wallDelta > cap) return -1
   return clamp(100 * (1 - idleDelta / wallDelta), 0, 100)
 }
 

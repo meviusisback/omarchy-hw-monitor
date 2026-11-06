@@ -37,6 +37,8 @@ TOP_DEFAULT = 6
 TOP_MIN = 3
 TOP_MAX = 12
 PID_CAP = 4096
+MERGE_CANDIDATES = 256
+SCAN_HOSTS_CAP = 4096
 NAME_MAX = 48
 SNAP_GAP_S = 0.4
 SORTS = ("ram", "cpu")
@@ -273,12 +275,18 @@ def build_rows(snap_a, snap_b, sys_delta, mem_total, page_kib, group):
         label = p["ident"] if p["ident"] else p["comm"]
         buckets.setdefault(merge_key(label), []).append((label, p))
     canon = {}
+    # Unione sep-prefix limitata: confrontare ogni chiave con tutte le
+    # canoniche è O(B^2) — 4096 comm distinti valgono 3.8 s contro un
+    # watchdog da 2 s. Oltre MERGE_CANDIDATES canoniche le chiavi restanti
+    # restano secchi propri (stesso output del merge completo sui casi
+    # reali, dove le identità distinte sono decine, non migliaia).
     for key in sorted(buckets, key=len):
         target = None
-        for done in canon:
-            if mergeable(done, key):
-                target = done
-                break
+        if len(canon) < MERGE_CANDIDATES:
+            for done in canon:
+                if mergeable(done, key):
+                    target = done
+                    break
         if target is None:
             target = key
         buckets[target].extend(buckets[key] if target != key else [])
@@ -729,6 +737,12 @@ def _scan_hosts(pid, deadline):
                         continue
                     host = raw_host.decode("ascii", "ignore")
                     if host in IGNORE_BROWSER_HOSTS or host.endswith(IGNORE_BROWSER_SUFFIXES):
+                        continue
+                    if host not in counts and len(counts) >= SCAN_HOSTS_CAP:
+                        # Cardinalità limitata: un renderer ostile può piantare
+                        # centinaia di migliaia di host distinti nel budget di
+                        # byte; oltre il tetto il campione è troncato (TTL corto).
+                        complete = False
                         continue
                     counts[host] = counts.get(host, 0) + 1
                 if scanned >= MEM_SCAN_MAX_BYTES:

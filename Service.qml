@@ -39,6 +39,22 @@ Item {
   property var probe: Model.parseProbe("")
   readonly property var cpuInfo: probe.cpu
   readonly property var gpuInfo: Model.pickGpu(probe.gpus, setting("gpu", "auto"), busiestIndex)
+  onGpuInfoChanged: {
+    if (_destroyed) return
+    var card = gpuInfo && gpuInfo.card ? String(gpuInfo.card) : ""
+    if (card !== _gpuCard) {
+      _gpuCard = card
+      _prevGpuIdle = null
+      _gpuSuspended = false
+      gpuPercent = -1
+      gpuTempC = -1
+      gpuWatts = -1
+      gpuRpm = -1
+      gpuMhz = -1
+      gpuVramUsedBytes = -1
+      gpuVramTotalBytes = -1
+    }
+  }
   readonly property bool hasGpu: gpuInfo !== null
   readonly property var nvidiaGpus: (probe.gpus || []).filter(function (g) { return String(g.kind) === "nvidia" })
   property var nvidiaSamples: []
@@ -192,25 +208,25 @@ Item {
       return
     }
 
+    if (gpuBusyFile.path === "" && gpuIdleFile.path !== "") sampleGpuIdle()
+    else if (gpuIdleFile.path === "" && gpuPmStatusFile.path !== "") refreshGpuSuspended()
     if (gpuBusyFile.path !== "") {
       gpuBusyFile.reload()
       gpuPercent = readNumber(gpuBusyFile, 0)
-    } else if (gpuIdleFile.path !== "") {
-      sampleGpuIdle()
     }
-    if (gpuTempFile.path !== "") {
+    if (gpuTempFile.path !== "" && !_gpuSuspended) {
       gpuTempFile.reload()
       gpuTempC = readTemp(gpuTempFile)
     }
-    if (gpuPowerFile.path !== "") {
+    if (gpuPowerFile.path !== "" && !_gpuSuspended) {
       gpuPowerFile.reload()
       gpuWatts = readNumber(gpuPowerFile, 1000000)
     }
-    if (gpuFanFile.path !== "") {
+    if (gpuFanFile.path !== "" && !_gpuSuspended) {
       gpuFanFile.reload()
       gpuRpm = readNumber(gpuFanFile, 0)
     }
-    if (gpuClockFile.path !== "") {
+    if (gpuClockFile.path !== "" && !_gpuSuspended) {
       gpuClockFile.reload()
       gpuMhz = readNumber(gpuClockFile, 1000000)
     } else if (gpuClockMhzFile.path !== "" && !_gpuSuspended) {
@@ -227,28 +243,44 @@ Item {
     }
   }
 
-  // A runtime-suspended GT is idle by definition, and reading its residency
-  // counter or clock would wake it, so it reads as 0% without touching either.
-  // The baseline is dropped too: the next delta must not span the suspension.
-  function sampleGpuIdle() {
+  // Reading runtime_status never wakes the device, so this stays cheap to
+  // call even when idle sampling is skipped (busyPath cards, clock-only cards).
+  function refreshGpuSuspended() {
     _gpuSuspended = false
     if (gpuPmStatusFile.path !== "") {
       gpuPmStatusFile.reload()
       _gpuSuspended = String(gpuPmStatusFile.text()).trim() === "suspended"
     }
+  }
+
+  // A runtime-suspended GT is idle by definition, and reading its residency
+  // counter or clock would wake it, so it reads as 0% without touching either.
+  // The baseline is dropped too: the next delta must not span the suspension.
+  function sampleGpuIdle() {
+    refreshGpuSuspended()
     if (_gpuSuspended) {
       _prevGpuIdle = null
       gpuPercent = 0
       gpuMhz = 0
+      // The gated reads below are skipped while suspended, so stale temp/power/
+      // fan would read as current forever; dash them until the GT resumes.
+      gpuTempC = -1
+      gpuWatts = -1
+      gpuRpm = -1
       return
     }
     gpuIdleFile.reload()
     var idleMs = readNumber(gpuIdleFile, 0)
     if (idleMs < 0) return
     var current = { idleMs: idleMs, atMs: Date.now() }
-    var usage = Model.gpuBusyFromIdle(_prevGpuIdle, current)
-    if (usage >= 0) gpuPercent = usage
-    _prevGpuIdle = current
+    // Twice the sample interval plus headroom: a suspend or clock step makes
+    // wall time jump while the counter sits frozen, and that delta would print
+    // ~100%. Refusing it re-baselines on the next tick instead.
+    var usage = Model.gpuBusyFromIdle(_prevGpuIdle, current, 2 * root.intervalSec * 1000 + 1000)
+    if (usage >= 0) {
+      gpuPercent = usage
+    }
+    _prevGpuIdle = usage >= 0 ? current : null
   }
 
   function sampleNvidia() {

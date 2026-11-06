@@ -49,5 +49,33 @@ assert.equal(samples.length, 3)
 assert.equal(samples[0].busy, 50)
 assert.equal(samples[1], null)
 assert.equal(samples[2].busy, 70)
+const intel = parseProbe(JSON.stringify({
+  cpu: {},
+  gpus: [{
+    kind: "i915", name: "Iris Xe", card: "card0",
+    idlePath: "/sys/class/drm/card0/gt/gt0/rc6_residency_ms",
+    clockMhzPath: "/sys/class/drm/card0/gt/gt0/rps_act_freq_mhz",
+    pmStatusPath: "/sys/class/drm/card0/device/power/runtime_status"
+  }]
+}))
+assert.equal(intel.gpus[0].idlePath, "/sys/class/drm/card0/gt/gt0/rc6_residency_ms")
+assert.equal(intel.gpus[0].clockMhzPath, "/sys/class/drm/card0/gt/gt0/rps_act_freq_mhz")
+assert.equal(intel.gpus[0].pmStatusPath, "/sys/class/drm/card0/device/power/runtime_status")
+
+const evil = parseProbe(JSON.stringify({
+  cpu: {},
+  gpus: [{ kind: "i915", idlePath: "/etc/passwd" }, { kind: "i915", idlePath: "/sys/../etc/x" }]
+}))
+assert.equal(evil.gpus[0].idlePath, undefined)
+assert.equal(evil.gpus[1].idlePath, undefined)
+
+assert.equal(gpuBusyFromIdle(null, { idleMs: 1, atMs: 1000 }), -1)
+assert.equal(gpuBusyFromIdle({ idleMs: 0, atMs: 0 }, { idleMs: 1500, atMs: 2000 }), 25)
+assert.equal(gpuBusyFromIdle({ idleMs: 5000, atMs: 0 }, { idleMs: 100, atMs: 2000 }), -1)
+assert.equal(gpuBusyFromIdle({ idleMs: 0, atMs: 0 }, { idleMs: 2500, atMs: 2000 }), 0)
+assert.equal(gpuBusyFromIdle({ idleMs: 0, atMs: 1000 }, { idleMs: 0, atMs: 1000 }), -1)
+// Suspend/resume: counter frozen, wall jumped — must re-baseline, not print 100%.
+assert.equal(gpuBusyFromIdle({ idleMs: 5000, atMs: 0 }, { idleMs: 5000, atMs: 3600000 }, 5000), -1)
+assert.equal(gpuBusyFromIdle({ idleMs: 0, atMs: 0 }, { idleMs: 1500, atMs: 2000 }, 5000), 25)
 
 console.log("model tests passed")
