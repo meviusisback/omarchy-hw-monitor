@@ -167,6 +167,44 @@ gpu_temp_for() {
   [[ -r $hw/temp1_input ]] && printf '%s' "$hw/temp1_input"
 }
 
+# Number of connectors currently driven by a DRM card. A connected output is
+# stronger evidence for the GPU the user is looking at than merely exposing a
+# load counter (integrated GPUs commonly expose one even when they drive no
+# display). The count, rather than a boolean, makes docking setups deterministic.
+connected_outputs_for() {
+  local card=$1 status count=0
+  for status in "$card"-*/status; do
+    [[ -r $status ]] || continue
+    [[ $(read_first "$status" || true) == connected ]] && ((count += 1))
+  done
+  printf '%d' "$count"
+}
+
+# Normalise the PCI domain's zero padding while preserving the complete BDF.
+# nvidia-smi spells domain zero as 00000000; sysfs normally spells it 0000.
+normalize_pci_bus() {
+  local bus=${1,,} domain rest
+  [[ $bus =~ ^([0-9a-f]+):([0-9a-f]{2}:[0-9a-f]{2}\.[0-7])$ ]] || return 1
+  domain=${BASH_REMATCH[1]}
+  rest=${BASH_REMATCH[2]}
+  while [[ ${#domain} -gt 1 && $domain == 0* ]]; do domain=${domain#0}; done
+  printf '%s:%s' "$domain" "$rest"
+}
+
+# Match the PCI bus id reported by nvidia-smi to its DRM card without assuming
+# card numbering or conflating identical BDF suffixes in different domains.
+drm_card_for_pci_bus() {
+  local bus card slot normalized_slot
+  bus=$(normalize_pci_bus "$1") || return 1
+  for card in /sys/class/drm/card[0-9]*; do
+    [[ $card == *-* || ! -d $card/device ]] && continue
+    slot=$(sed -n 's/^PCI_SLOT_NAME=//p' "$card/device/uevent" 2>/dev/null | head -1)
+    normalized_slot=$(normalize_pci_bus "$slot" || true)
+    [[ -n $normalized_slot && $normalized_slot == "$bus" ]] && { printf '%s' "$card"; return 0; }
+  done
+  return 1
+}
+
 gpu_entries=()
 
 for card in /sys/class/drm/card[0-9]*; do
@@ -194,6 +232,7 @@ for card in /sys/class/drm/card[0-9]*; do
   entry+="$(printf '%s: %s, ' "$(json_str kind)" "$(json_str "${driver:-drm}")")"
   entry+="$(printf '%s: %s, ' "$(json_str name)" "$(json_str "$(gpu_name_for "$dev" "$driver")")")"
   entry+="$(printf '%s: %s, ' "$(json_str card)" "$(json_str "${card##*/}")")"
+  entry+="$(printf '%s: %s, ' "$(json_str connectedOutputs)" "$(connected_outputs_for "$card")")"
   entry+="$(field_path busyPath "$dev/gpu_busy_percent")"
   entry+="$(field_path vramUsedPath "$dev/mem_info_vram_used")"
   entry+="$(field_path vramTotalPath "$dev/mem_info_vram_total")"
@@ -234,14 +273,23 @@ if [[ -n $nv_bin ]]; then
   # would otherwise be taken for a GPU name.
   # One entry per card: index is the id nvidia-smi --id expects. The list is
   # read first so a failing nvidia-smi (its exit status) registers no cards.
+  # Each row also carries the PCI bus id, so the card can be matched to its DRM
+  # node and report connected outputs alongside the sysfs entries.
   nv_idx=0
-  nv_names=$("$nv_bin" --query-gpu=name --format=csv,noheader 2>/dev/null) || nv_names=""
-  while IFS= read -r nv_name; do
-    nv_name=$(trim "$nv_name")
-    if [[ -n $nv_name ]]; then
+  nv_names=$("$nv_bin" --query-gpu=name,pci.bus_id --format=csv,noheader,nounits 2>/dev/null) || nv_names=""
+  while IFS= read -r nv_row; do
+    nv_row=$(trim "$nv_row")
+    if [[ -n $nv_row && $nv_row == *,* ]]; then
+      nv_name=$(trim "${nv_row%,*}")
+      nv_bus=$(trim "${nv_row##*,}")
       nv="{$(printf '%s: %s, ' "$(json_str kind)" "$(json_str nvidia)")"
       nv+="$(printf '%s: %s, ' "$(json_str name)" "$(json_str "$nv_name")")"
       nv+="$(printf '%s: %s, ' "$(json_str nvidiaPath)" "$(json_str "$nv_bin")")"
+      nv_card=$(drm_card_for_pci_bus "$nv_bus" || true)
+      if [[ -n $nv_card ]]; then
+        nv+="$(printf '%s: %s, ' "$(json_str card)" "$(json_str "${nv_card##*/}")")"
+        nv+="$(printf '%s: %s, ' "$(json_str connectedOutputs)" "$(connected_outputs_for "$nv_card")")"
+      fi
       nv+="$(printf '%s: %s' "$(json_str index)" "$nv_idx")}"
       gpu_entries+=("$nv")
       nv_idx=$((nv_idx + 1))

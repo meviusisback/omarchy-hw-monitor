@@ -120,6 +120,7 @@ function parseProbe(raw) {
       var card = cleanString(g.card, 64)
       if (card !== undefined) gpu.card = card
       gpu.index = Math.max(0, Math.floor(toNumberSafe(g.index, 0)))
+      gpu.connectedOutputs = clamp(Math.floor(toNumberSafe(g.connectedOutputs, 0)), 0, 64)
       // Absolute path of the nvidia-smi the probe resolved: must be a clean
       // absolute path (no relative names, no traversal); the widget falls
       // back to a bare 'nvidia-smi' when it is missing or malformed.
@@ -153,12 +154,26 @@ function busiestNvidia(samples, current, margin) {
   return best
 }
 
-// Pick which discovered card the widget reports on. `auto` means the first,
-// which hw-probe has already sorted so a card with a load counter wins.
+// Pick which discovered card the widget reports on. `auto` prefers the card
+// driving the most connected displays, then falls back to probe order (where a
+// card with a load counter wins). This keeps a headless iGPU from masking the
+// discrete GPU that is actually driving the desktop. `busiest` follows the
+// NVIDIA card Service picked via busiestNvidia (sticky).
 function pickGpu(gpus, preference, busiestIndex) {
   if (!(gpus instanceof Array) || gpus.length === 0) return null
   var want = String(preference === undefined || preference === null ? "auto" : preference).trim().toLowerCase()
-  if (want === "" || want === "auto") return gpus[0]
+  if (want === "" || want === "auto") {
+    var selected = gpus[0]
+    var mostOutputs = Math.max(0, toNumberSafe(selected.connectedOutputs, 0))
+    for (var a = 1; a < gpus.length; a++) {
+      var outputs = Math.max(0, toNumberSafe(gpus[a].connectedOutputs, 0))
+      if (outputs > mostOutputs) {
+        selected = gpus[a]
+        mostOutputs = outputs
+      }
+    }
+    return selected
+  }
 
   // "busiest": follow the card Service picked via busiestNvidia (sticky).
   if (want === "busiest") {
