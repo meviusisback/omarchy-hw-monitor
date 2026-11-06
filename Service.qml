@@ -44,9 +44,12 @@ Item {
     // The idle baseline belongs to one GT's counter; a reselect to a different
     // card must not mix it into another card's delta. A re-probe resolving to
     // the same card keeps the baseline — the counter never changed identity.
-    var card = gpuInfo && gpuInfo.card ? String(gpuInfo.card) : ""
-    if (card !== _gpuCard) {
-      _gpuCard = card
+    // Keyed on kind+card+index: unmatched NVIDIA entries carry no card field,
+    // but their nvidia-smi index is distinct per card.
+    var gpu = gpuInfo || {}
+    var key = String(gpu.kind || "") + "/" + String(gpu.card || "") + "/" + String(gpu.index === undefined ? "" : gpu.index)
+    if (key !== _gpuKey) {
+      _gpuKey = key
       _prevGpuIdle = null
       _gpuSuspended = false
       // Readouts reset too, so the old card's figures never render as the new
@@ -152,7 +155,7 @@ Item {
   // Card the current baseline and readouts belong to. onGpuInfoChanged fires
   // on every probe assignment (new object identity), so the reset keys on
   // this instead — otherwise a same-card re-probe needlessly dashes Intel load.
-  property string _gpuCard: ""
+  property string _gpuKey: ""
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
