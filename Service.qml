@@ -235,8 +235,10 @@ Item {
     var all = Model.parseNvidiaAll(raw)
     busiestIndex = Model.busiestNvidia(all, busiestIndex, 10)
     var sample = all[gpuInfo && gpuInfo.index !== undefined ? gpuInfo.index : 0]
-    if (!sample) return
+    // Publish every card before the guard: a null or missing selected slot keeps
+    // the bar readouts on their last good value, but must not freeze the panel.
     nvidiaSamples = all
+    if (!sample) return
     gpuPercent = sample.busy
     gpuTempC = sample.tempC
     gpuWatts = sample.watts
