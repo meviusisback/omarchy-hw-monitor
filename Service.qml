@@ -450,8 +450,11 @@ Item {
         if (root._destroyed) return
         root.probe = Model.parseProbe(text)
         // Sensor paths only become known here, so take the first real sample
-        // once they land instead of waiting out a whole interval.
+        // once they land instead of waiting out a whole interval. Re-base the
+        // warmup on this sample: the 250 ms idle-delta floor would refuse a
+        // second sample that lands inside the same window on a slow probe.
         root.sample()
+        warmupSampleTimer.restart()
       }
     }
     stderr: StdioCollector { id: probeErr; waitForEnd: false }
