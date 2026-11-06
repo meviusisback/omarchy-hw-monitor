@@ -235,11 +235,15 @@ function cpuUsage(previous, current) {
 // interval means the counter sat frozen while time advanced — suspend/resume
 // or a clock step — and the delta would read ~100%; refuse it and re-baseline.
 // Twice the interval plus headroom covers timer jitter without hiding real load.
+// A window under MIN_WALL_MS is sub-resolution (ms-granularity counters make
+// 1-3 ms of wall divide two small integers into 0/100%): manual resamples can
+// land in the same event-loop turn as the bar timer, so refuse those too.
+var GPU_IDLE_MIN_WALL_MS = 250
 function gpuBusyFromIdle(previous, current, maxWallMs) {
   if (!previous || !current) return -1
   var wallDelta = current.atMs - previous.atMs
   var idleDelta = current.idleMs - previous.idleMs
-  if (wallDelta <= 0 || idleDelta < 0) return -1
+  if (wallDelta < GPU_IDLE_MIN_WALL_MS || idleDelta < 0) return -1
   var cap = toNumberSafe(maxWallMs, 0)
   if (cap > 0 && wallDelta > cap) return -1
   return clamp(100 * (1 - idleDelta / wallDelta), 0, 100)

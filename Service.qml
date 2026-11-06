@@ -41,6 +41,11 @@ Item {
   readonly property var gpuInfo: Model.pickGpu(probe.gpus, setting("gpu", "auto"), busiestIndex)
   onGpuInfoChanged: {
     if (_destroyed) return
+    // The idle baseline belongs to one GT's counter; a reselect to a different
+    // card must not mix it into another card's delta. A re-probe resolving to
+    // the same card keeps the baseline — the counter never changed identity.
+    // Readouts reset too, so the old card's figures never render as the new
+    // card's until the next sample repopulates them.
     var card = gpuInfo && gpuInfo.card ? String(gpuInfo.card) : ""
     if (card !== _gpuCard) {
       _gpuCard = card
@@ -251,6 +256,15 @@ Item {
       gpuPmStatusFile.reload()
       _gpuSuspended = String(gpuPmStatusFile.text()).trim() === "suspended"
     }
+    // Clock-only cards never run sampleGpuIdle, so dash here too: the gated
+    // reads below are skipped while suspended and would otherwise freeze.
+    // (sampleGpuIdle also sets gpuPercent = 0 on its own suspended branch.)
+    if (_gpuSuspended) {
+      gpuMhz = 0
+      gpuTempC = -1
+      gpuWatts = -1
+      gpuRpm = -1
+    }
   }
 
   // A runtime-suspended GT is idle by definition, and reading its residency
@@ -261,12 +275,6 @@ Item {
     if (_gpuSuspended) {
       _prevGpuIdle = null
       gpuPercent = 0
-      gpuMhz = 0
-      // The gated reads below are skipped while suspended, so stale temp/power/
-      // fan would read as current forever; dash them until the GT resumes.
-      gpuTempC = -1
-      gpuWatts = -1
-      gpuRpm = -1
       return
     }
     gpuIdleFile.reload()
@@ -275,12 +283,13 @@ Item {
     var current = { idleMs: idleMs, atMs: Date.now() }
     // Twice the sample interval plus headroom: a suspend or clock step makes
     // wall time jump while the counter sits frozen, and that delta would print
-    // ~100%. Refusing it re-baselines on the next tick instead.
+    // ~100%. Refusing it keeps the last good figure; the baseline still moves
+    // to current, so the NEXT delta spans only the post-resume interval.
     var usage = Model.gpuBusyFromIdle(_prevGpuIdle, current, 2 * root.intervalSec * 1000 + 1000)
     if (usage >= 0) {
       gpuPercent = usage
     }
-    _prevGpuIdle = usage >= 0 ? current : null
+    _prevGpuIdle = current
   }
 
   function sampleNvidia() {

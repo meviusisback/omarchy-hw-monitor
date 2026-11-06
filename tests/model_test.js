@@ -74,6 +74,10 @@ assert.equal(gpuBusyFromIdle({ idleMs: 0, atMs: 0 }, { idleMs: 1500, atMs: 2000 
 assert.equal(gpuBusyFromIdle({ idleMs: 5000, atMs: 0 }, { idleMs: 100, atMs: 2000 }), -1)
 assert.equal(gpuBusyFromIdle({ idleMs: 0, atMs: 0 }, { idleMs: 2500, atMs: 2000 }), 0)
 assert.equal(gpuBusyFromIdle({ idleMs: 0, atMs: 1000 }, { idleMs: 0, atMs: 1000 }), -1)
+// Sub-resolution window: same-tick resample must not divide into 0/100%.
+assert.equal(gpuBusyFromIdle({ idleMs: 100, atMs: 0 }, { idleMs: 100, atMs: 1 }, 5000), -1)
+assert.equal(gpuBusyFromIdle({ idleMs: 100, atMs: 0 }, { idleMs: 101, atMs: 2 }, 5000), -1)
+assert.equal(gpuBusyFromIdle({ idleMs: 0, atMs: 0 }, { idleMs: 250, atMs: 1000 }, 5000), 75)
 // Suspend/resume: counter frozen, wall jumped — must re-baseline, not print 100%.
 assert.equal(gpuBusyFromIdle({ idleMs: 5000, atMs: 0 }, { idleMs: 5000, atMs: 3600000 }, 5000), -1)
 assert.equal(gpuBusyFromIdle({ idleMs: 0, atMs: 0 }, { idleMs: 1500, atMs: 2000 }, 5000), 25)
