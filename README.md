@@ -259,6 +259,16 @@ is open.
 An NVIDIA card is the exception: it reports none of this through sysfs, so it
 is polled through `nvidia-smi` on the same interval.
 
+With several cards installed, `gpu: "auto"` (the default) shows the card
+driving the most connected displays — so on a hybrid desktop with a headless
+iGPU and a discrete card behind the monitors, the readings follow the card you
+are actually looking at. When no card drives a display (or the counts tie),
+the probe order wins: a card reporting load sorts ahead of one that only
+reports temperature. An explicit index (`0`, `1`) or name substring always
+overrides this. NVIDIA cards are matched to their DRM card by PCI bus id
+(tolerant of `nvidia-smi`'s 8-digit domain padding), so a display-driving RTX
+is preferred over a load-reporting headless iGPU.
+
 Sensor paths are found once, at load, by [`hw-probe`](hw-probe) — a small shell
 script, because working out *which* files a machine exposes means globbing
 `hwmon` and matching labels, and every vendor names its sensors differently.
