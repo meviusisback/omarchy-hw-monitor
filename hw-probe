@@ -271,25 +271,30 @@ nv_bin=$(command -v nvidia-smi 2>/dev/null)
 if [[ -n $nv_bin ]]; then
   # With no NVIDIA card nvidia-smi fails but prints its error on stdout, which
   # would otherwise be taken for a GPU name.
-  nv_row=$("$nv_bin" --query-gpu=name,pci.bus_id --format=csv,noheader,nounits 2>/dev/null | head -1) || nv_row=""
-  nv_bus=$(trim "${nv_row##*,}")
-  nv_name=$(trim "${nv_row%,*}")
-  if [[ -n $nv_name && $nv_row == *,* ]]; then
-    nv="{$(printf '%s: %s, ' "$(json_str kind)" "$(json_str nvidia)")"
-    nv+="$(printf '%s: %s, ' "$(json_str name)" "$(json_str "$nv_name")")"
-    nv+="$(printf '%s: %s, ' "$(json_str nvidiaPath)" "$(json_str "$nv_bin")")"
-    nv_card=$(drm_card_for_pci_bus "$nv_bus" || true)
-    if [[ -n $nv_card ]]; then
-      nv+="$(printf '%s: %s, ' "$(json_str card)" "$(json_str "${nv_card##*/}")")"
-      nv+="$(printf '%s: %s, ' "$(json_str connectedOutputs)" "$(connected_outputs_for "$nv_card")")"
-    fi
-    nv+="$(printf '%s: %s' "$(json_str index)" 0)}"
-    if ((${#gpu_entries[@]} == 0)); then
-      gpu_entries=("$nv")
-    else
+  # One entry per card: index is the id nvidia-smi --id expects. The list is
+  # read first so a failing nvidia-smi (its exit status) registers no cards.
+  # Each row also carries the PCI bus id, so the card can be matched to its DRM
+  # node and report connected outputs alongside the sysfs entries.
+  nv_idx=0
+  nv_names=$("$nv_bin" --query-gpu=name,pci.bus_id --format=csv,noheader,nounits 2>/dev/null) || nv_names=""
+  while IFS= read -r nv_row; do
+    nv_row=$(trim "$nv_row")
+    if [[ -n $nv_row && $nv_row == *,* ]]; then
+      nv_name=$(trim "${nv_row%,*}")
+      nv_bus=$(trim "${nv_row##*,}")
+      nv="{$(printf '%s: %s, ' "$(json_str kind)" "$(json_str nvidia)")"
+      nv+="$(printf '%s: %s, ' "$(json_str name)" "$(json_str "$nv_name")")"
+      nv+="$(printf '%s: %s, ' "$(json_str nvidiaPath)" "$(json_str "$nv_bin")")"
+      nv_card=$(drm_card_for_pci_bus "$nv_bus" || true)
+      if [[ -n $nv_card ]]; then
+        nv+="$(printf '%s: %s, ' "$(json_str card)" "$(json_str "${nv_card##*/}")")"
+        nv+="$(printf '%s: %s, ' "$(json_str connectedOutputs)" "$(connected_outputs_for "$nv_card")")"
+      fi
+      nv+="$(printf '%s: %s' "$(json_str index)" "$nv_idx")}"
       gpu_entries+=("$nv")
+      nv_idx=$((nv_idx + 1))
     fi
-  fi
+  done <<<"$nv_names"
 fi
 
 # -------------------------------------------------------------------- output

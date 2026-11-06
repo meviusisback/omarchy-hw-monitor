@@ -230,7 +230,7 @@ omarchy bar set meviusisback.hw-monitor fahrenheit true --json
 | `tempIconRotation` | int | `0` | Rotate the temperature glyph (0, 90, 180, 270). |
 | `ramIconRotation` | int | `0` | Rotate the memory glyph (0, 90, 180, 270). |
 | `refreshIntervalSec` | int | `2` | Seconds between samples. `1` is as fast as `FileView` makes sense; `5` is plenty for a background bar. |
-| `gpu` | string | `"auto"` | `"auto"` prefers the card driving connected displays, then a card reporting load; otherwise an index (`0`, `1`) or name substring. |
+| `gpu` | string | `"auto"` | `"auto"` prefers the card driving connected displays, then a card reporting load; `"busiest"` follows the NVIDIA card with the highest load; otherwise an index (`0`, `1`) or name substring. |
 | `warnPercent` | int | `70` | Load threshold where numbers and glyphs warm toward the urgent colour. |
 | `criticalPercent` | int | `90` | Load threshold where the gauge glows and color reaches full urgent. |
 | `warnTempC` | int | `75` | Temperature threshold (°C) where figures warm toward urgent. |
@@ -268,6 +268,10 @@ reports temperature. An explicit index (`0`, `1`) or name substring always
 overrides this. NVIDIA cards are matched to their DRM card by PCI bus id
 (tolerant of `nvidia-smi`'s 8-digit domain padding), so a display-driving RTX
 is preferred over a load-reporting headless iGPU.
+
+`gpu: "busiest"` follows the NVIDIA card with the highest load and switches
+only when another card is at least 10 points busier, so two cards under similar
+load do not make the bar flip every sample.
 
 Sensor paths are found once, at load, by [`hw-probe`](hw-probe) — a small shell
 script, because working out *which* files a machine exposes means globbing
