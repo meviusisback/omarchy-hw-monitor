@@ -44,13 +44,13 @@ Item {
     // The idle baseline belongs to one GT's counter; a reselect to a different
     // card must not mix it into another card's delta. A re-probe resolving to
     // the same card keeps the baseline — the counter never changed identity.
-    // Readouts reset too, so the old card's figures never render as the new
-    // card's until the next sample repopulates them.
     var card = gpuInfo && gpuInfo.card ? String(gpuInfo.card) : ""
     if (card !== _gpuCard) {
       _gpuCard = card
       _prevGpuIdle = null
       _gpuSuspended = false
+      // Readouts reset too, so the old card's figures never render as the new
+      // card's until the next sample repopulates them.
       gpuPercent = -1
       gpuTempC = -1
       gpuWatts = -1
@@ -149,6 +149,10 @@ Item {
   // is derived the same way as CPU load, so it also needs two samples.
   property var _prevGpuIdle: null
   property bool _gpuSuspended: false
+  // Card the current baseline and readouts belong to. onGpuInfoChanged fires
+  // on every probe assignment (new object identity), so the reset keys on
+  // this instead — otherwise a same-card re-probe needlessly dashes Intel load.
+  property string _gpuCard: ""
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined

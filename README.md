@@ -276,9 +276,11 @@ xe): the share of each interval the GT was not idle. That is how busy the GT
 was kept, not `intel_gpu_top`'s per-engine figure, which needs perf and
 therefore root. The clock comes from the driver's actual-frequency file. A GT
 that has runtime-suspended reads as idle without being touched, since reading
-its counters would wake it; its temperature, power and fan read as dashes
-until it resumes. GPU temperature is the card's own hwmon sensor when the
-driver exposes one, otherwise a dash.
+its counters would wake it; its clock, temperature, power and fan read as
+dashes until it resumes. GPU temperature is the card's own hwmon sensor when
+the driver exposes one, otherwise a dash. In probe order, idle-derived Intel
+cards sort last — after NVIDIA and after temperature-only cards — so on a
+tie they never win `auto` over a card with a direct load counter.
 
 `gpu: "busiest"` follows the NVIDIA card with the highest load and switches
 only when another card is at least 10 points busier, so two cards under similar
