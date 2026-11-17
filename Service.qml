@@ -56,6 +56,7 @@ Item {
       // card's until the next sample repopulates them.
       gpuPercent = -1
       gpuTempC = -1
+      gpuTempRealMs = 0
       gpuWatts = -1
       gpuRpm = -1
       gpuMhz = -1

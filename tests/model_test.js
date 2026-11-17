@@ -82,4 +82,11 @@ assert.equal(gpuBusyFromIdle({ idleMs: 0, atMs: 0 }, { idleMs: 250, atMs: 1000 }
 assert.equal(gpuBusyFromIdle({ idleMs: 5000, atMs: 0 }, { idleMs: 5000, atMs: 3600000 }, 5000), -1)
 assert.equal(gpuBusyFromIdle({ idleMs: 0, atMs: 0 }, { idleMs: 1500, atMs: 2000 }, 5000), 25)
 
+// Apple GPU powered down reads ~0: hold the last real reading within the window, then unknown.
+assert.equal(steadyGpuTemp("asahi", 2.2, -1, 0, 1000), -1)
+assert.equal(steadyGpuTemp("asahi", 2.2, 53.9, 1000, 1000 + gpuTempHoldMs), 53.9)
+assert.equal(steadyGpuTemp("asahi", 2.2, 53.9, 1000, 1001 + gpuTempHoldMs), -1)
+assert.equal(steadyGpuTemp("asahi", 48, 53.9, 1000, 99999), 48)
+assert.equal(steadyGpuTemp("amdgpu", 2.2, 53.9, 1000, 1000), 2.2)
+
 console.log("model tests passed")
