@@ -318,8 +318,10 @@ Panel {
       }
     }
 
-    // GPU Temperature (standalone cell used in 'icons' mode)
-    if (showGpuTemp && hw.hasGpu && hw.gpuTempC > 0 && showTemps && mode === "icons") {
+    // GPU Temperature (standalone cell in 'icons' mode, and for a card with no
+    // load counter, whose temperature has no load cell to ride on)
+    if (showGpuTemp && hw.hasGpu && hw.gpuTempC > 0 && showTemps
+        && (mode === "icons" || (hw.gpuPercent < 0 && hw.gpuVramPercent < 0))) {
       cellMap["gpu-temp"] = {
         key: "gpu-temp",
         label: "GPU°",
@@ -420,6 +422,7 @@ Panel {
     if (hw.hasGpu) {
       lines.push("")
       var gpu = "GPU  " + Model.formatPercent(hw.gpuPercent)
+      if (hw.gpuTempC > 0) gpu += "  ·  " + Model.formatTemp(hw.gpuTempC, fahrenheit)
       if (hw.gpuWatts >= 0) gpu += "  ·  " + Model.formatWatts(hw.gpuWatts)
       lines.push(gpu)
       lines.push(String(hw.gpuInfo.name))
