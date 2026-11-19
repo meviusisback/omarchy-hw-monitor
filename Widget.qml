@@ -69,6 +69,13 @@ Panel {
   readonly property bool showRam: boolSetting("showRam", true)
   readonly property bool showTopProcs: boolSetting("showTopProcs", true)
 
+  // Whether the selected card exposes a load counter at all: a busy percentage,
+  // Intel's idle residency, VRAM, or nvidia-smi. A -1 reading alone is not
+  // proof of absence — it also means "not sampled yet", which would otherwise
+  // flip a load card into its temperature cell for the first sample.
+  readonly property bool gpuHasCounter: hw.hasGpu && !!(hw.gpuInfo.busyPath || hw.gpuInfo.idlePath
+    || hw.gpuInfo.vramTotalPath || hw.gpuIsNvidia)
+
   readonly property var itemOrder: {
     var raw = setting("itemsOrder", ["gpu", "cpu", "cpu-temp", "ram"])
     if (raw instanceof Array) return raw.map(function(s) { return String(s).trim().toLowerCase() })
@@ -263,7 +270,7 @@ Panel {
     var cellMap = {}
 
     // GPU Load
-    if (showGpu && hw.hasGpu && (hw.gpuPercent >= 0 || hw.gpuVramPercent >= 0)) {
+    if (showGpu && hw.hasGpu && gpuHasCounter) {
       var busy = hw.gpuPercent
       var meterValue = busy >= 0 ? busy : hw.gpuVramPercent
       cellMap["gpu"] = {
@@ -321,7 +328,7 @@ Panel {
     // GPU Temperature (standalone cell in 'icons' mode, and for a card with no
     // load counter, whose temperature has no load cell to ride on)
     if (showGpuTemp && hw.hasGpu && hw.gpuTempC > 0 && showTemps
-        && (mode === "icons" || (hw.gpuPercent < 0 && hw.gpuVramPercent < 0))) {
+        && (mode === "icons" || !gpuHasCounter)) {
       cellMap["gpu-temp"] = {
         key: "gpu-temp",
         label: "GPU°",
@@ -330,7 +337,9 @@ Panel {
         value: tempText(hw.gpuTempC),
         pad: "",
         slotted: false,
-        temp: "",
+        // `full` keeps figures off by default; the temperature row is what
+        // carries them there, since this cell has no load figure to add to.
+        temp: mode === "full" && !showValues ? tempText(hw.gpuTempC) : "",
         tempC: hw.gpuTempC,
         clock: "",
         ratio: Math.min(1, Math.max(0, (hw.gpuTempC - 30) / Math.max(1, criticalTempC - 30))),
