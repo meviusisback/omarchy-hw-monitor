@@ -81,7 +81,7 @@
         "type": "boolean",
         "label": "Show GPU load",
         "defaultValue": true,
-        "description": "Show GPU load in the top bar (hidden automatically if no GPU card is found)."
+        "description": "Show GPU load in the top bar (hidden automatically if no GPU card reports load or VRAM)."
       },
       {
         "key": "showCpu",

@@ -56,6 +56,7 @@ Item {
       // card's until the next sample repopulates them.
       gpuPercent = -1
       gpuTempC = -1
+      gpuTempRealMs = 0
       gpuWatts = -1
       gpuRpm = -1
       gpuMhz = -1
@@ -85,6 +86,7 @@ Item {
 
   property real gpuPercent: -1
   property real gpuTempC: -1
+  property real gpuTempRealMs: 0
   property real gpuWatts: -1
   property real gpuRpm: -1
   property real gpuMhz: -1
@@ -228,7 +230,10 @@ Item {
     }
     if (gpuTempFile.path !== "" && !_gpuSuspended) {
       gpuTempFile.reload()
-      gpuTempC = readTemp(gpuTempFile)
+      var gpuReading = readTemp(gpuTempFile)
+      var gpuReadMs = Date.now()
+      gpuTempC = Model.steadyGpuTemp(String(gpuInfo.kind), gpuReading, gpuTempC, gpuTempRealMs, gpuReadMs)
+      if (gpuReading >= 10) gpuTempRealMs = gpuReadMs
     }
     if (gpuPowerFile.path !== "" && !_gpuSuspended) {
       gpuPowerFile.reload()
