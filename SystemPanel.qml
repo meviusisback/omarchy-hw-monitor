@@ -117,7 +117,10 @@ KeyboardPanel {
   onOpenChanged: {
     if (open) {
       hw.sample()
-      hw.procPanelOpen = true
+      // Sampling is authorized only while the panel is open AND the section
+      // is visible. Service also gates on showTopProcs; keep this flag honest
+      // so the two agree instead of relying on one side alone.
+      hw.procPanelOpen = root.showTopProcs
       hw.refreshProcTop()
       var initial = hw.cpuPercent >= 0 ? hw.cpuPercent : 0
       root.cpuHistory = [initial, initial]
@@ -126,6 +129,10 @@ KeyboardPanel {
       root.settingsOpen = false
       hw.procPanelOpen = false
     }
+  }
+
+  onShowTopProcsChanged: {
+    if (root.open) hw.procPanelOpen = root.showTopProcs
   }
 
   focusTarget: keyCatcher

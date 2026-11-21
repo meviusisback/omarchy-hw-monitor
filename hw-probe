@@ -347,8 +347,12 @@ if [[ -n $nv_bin ]]; then
   # read first so a failing nvidia-smi (its exit status) registers no cards.
   # Each row also carries the PCI bus id, so the card can be matched to its DRM
   # node and report connected outputs alongside the sysfs entries.
+  # Bound the child itself: the panel's discovery watchdog can only signal the
+  # Bash helper, so a hung nvidia-smi would survive it as an orphan. `timeout`
+  # signals the child's own process group (TERM at 5 s, KILL at 6 s), inside the
+  # widget's 8 s watchdog. A bound probe is simply treated as no NVIDIA cards.
   nv_idx=0
-  nv_names=$("$nv_bin" --query-gpu=name,pci.bus_id --format=csv,noheader,nounits 2>/dev/null) || nv_names=""
+  nv_names=$(/usr/bin/timeout -k 1 5 "$nv_bin" --query-gpu=name,pci.bus_id --format=csv,noheader,nounits 2>/dev/null) || nv_names=""
   while IFS= read -r nv_row; do
     nv_row=$(trim "$nv_row")
     if [[ -n $nv_row && $nv_row == *,* ]]; then
